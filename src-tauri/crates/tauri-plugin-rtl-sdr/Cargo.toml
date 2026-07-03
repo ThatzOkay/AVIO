@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-rtl-sdr"
+version = "0.1.0"
+edition = "2021"
+links = "tauri-plugin-rtl-sdr"
+
+[lib]
+name = "tauri_plugin_rtl_sdr"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+fmradio = "0.4.2"
+num-complex = "0.4"
+desperado = { version = "0.4.2", features = ["rtlsdr"] }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-detect-rtl-sdr"
+description = "Enables the detect_rtl_sdr command without any pre-configured scope."
+commands.allow = ["detect_rtl_sdr"]
+
+[[permission]]
+identifier = "deny-detect-rtl-sdr"
+description = "Denies the detect_rtl_sdr command without any pre-configured scope."
+commands.deny = ["detect_rtl_sdr"]

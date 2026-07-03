@@ -1,0 +1,10 @@
+/home/thatzokay/Projects/rust/avio/target/debug/deps/markup5ever-75d45d3b1eef6c5f.d: /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/lib.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/mod.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/tree_builder.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/serialize.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/buffer_queue.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/smallcharset.rs
+
+/home/thatzokay/Projects/rust/avio/target/debug/deps/libmarkup5ever-75d45d3b1eef6c5f.rmeta: /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/lib.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/mod.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/tree_builder.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/serialize.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/buffer_queue.rs /home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/smallcharset.rs
+
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/lib.rs:
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/mod.rs:
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/interface/tree_builder.rs:
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/serialize.rs:
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/buffer_queue.rs:
+/home/thatzokay/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/markup5ever-0.38.0/util/smallcharset.rs:

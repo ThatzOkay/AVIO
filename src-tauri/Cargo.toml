@@ -1,0 +1,92 @@
+[package]
+name = "avio"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "avio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+regex = "1"
+regex-split = "0.1.0"
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+fmradio = "0.4.2"
+nusb = "0.2.4"
+futures-lite = "2.6.1"
+whoami = "2.1.2"
+evno = "1"
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-rtl-sdr = { path = "crates/tauri-plugin-rtl-sdr" }
+tauri-plugin-store = "2"
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# FM demod/RDS decode is far too slow to keep up with the RTL-SDR's real-time
+# sample rate when compiled unoptimized. rubato (resampling, used internally by
+# AdaptiveResampler) and biquad (filters, used internally by desperado's
+# Decimator/DeemphasisFilter) do the actual heavy per-sample math and closed
+# the whole gap on their own. fmradio/desperado/num-complex and our own plugin
+# crate (below) are cheap insurance for the per-sample Complex<f32> glue code
+# around them. Keeps debug builds of our own code fast to compile while still
+# getting real-time audio.
+[profile.dev.package.rubato]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.biquad]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.num-complex]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.fmradio]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.desperado]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
+
+# FmDemod::process() itself (IQ-to-complex conversion, the per-sample map/collect
+# chains) lives directly in this workspace crate, not a dependency — profile
+# overrides above don't reach it, so it needs its own entry.
+[profile.dev.package.tauri-plugin-rtl-sdr]
+opt-level = 3
+codegen-units = 1
+debug-assertions = false
+overflow-checks = false
