@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "nl.thatzokay.avio",
   "build": {
-    "beforeDevCommand": "bun scripts/build-gst-host-sidecar.ts && bun run dev",
+    "beforeDevCommand": "bun scripts/build-gst-host-sidecar.ts && bun scripts/build-avio-compositor-sidecar.ts && bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun scripts/build-gst-host-sidecar.ts && bun run build",
+    "beforeBuildCommand": "bun scripts/build-gst-host-sidecar.ts && bun scripts/build-avio-compositor-sidecar.ts && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -15,12 +15,13 @@
         "title": "avio",
         "decorations": false,
         "resizable": false,
-        "fullscreen": true
+        "fullscreen": false
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "enableGTKAppId": true
   },
   "bundle": {
     "active": true,
@@ -29,7 +30,8 @@
       "binaries/gst-host"
     ],
     "resources": [
-      "assets/**/*"
+      "assets/**/*",
+      "compositor/**/*"
     ],
     "icon": [
       "icons/32x32.png",

@@ -24,7 +24,7 @@ static void ensure_init() {
   static bool done = false;
   if (!done) {
     gst_init(NULL, NULL);
-    if (const char* dbg = getenv("LIVI_GST_DEBUG")) {
+    if (const char* dbg = getenv("AVIO_GST_DEBUG")) {
       gst_debug_set_threshold_from_string(
         (dbg[0] == '1' && dbg[1] == '\0')
           ? "v4l2codecs-decoder:6,v4l2codecs-h265dec:6,waylandsink:5,wl_dmabuf:6"
@@ -149,7 +149,7 @@ static GstPadProbeReturn colorimetry_fixup_probe(GstPad*, GstPadProbeInfo* info,
 
 static void remove_video_view(Player* p) {
   if (p->view) {
-    livi_remove_view(p->view);
+    avio_remove_view(p->view);
     p->view = nullptr;
   }
 }
@@ -203,7 +203,7 @@ static const char* sw_decoder_for(const std::string& c) {
 
 // Best available decoder per codec, HW-first then software fallback
 static const char* decoder_for(const std::string& c) {
-  if (getenv("LIVI_GST_SWDEC")) {
+  if (getenv("AVIO_GST_SWDEC")) {
     if (c == "h265") return "avdec_h265";
     if (c == "vp9") return "vp9dec";
     if (c == "av1") return "dav1ddec";
@@ -239,8 +239,8 @@ static std::string sink_chain() {
 #elif defined(_WIN32)
   return "d3d11videosink name=sink sync=false qos=false force-aspect-ratio=false";
 #else
-  // waylandsink hands the decoded dmabuf to avio-compositor zero-copy. LIVI_GST_SINK overrides.
-  const char* sink_env = getenv("LIVI_GST_SINK");
+  // waylandsink hands the decoded dmabuf to avio-compositor zero-copy. AVIO_GST_SINK overrides.
+  const char* sink_env = getenv("AVIO_GST_SINK");
   return std::string(sink_env && *sink_env ? sink_env : "waylandsink") +
     " name=sink sync=false";
 #endif
@@ -253,7 +253,7 @@ static std::string caps_for(const std::string& c) {
   return "video/x-h264,stream-format=byte-stream";
 }
 
-static void livi_push_player(Player* p, const void* data, size_t len) {
+static void avio_push_player(Player* p, const void* data, size_t len) {
   if (!p || !p->appsrc || !data || len == 0) return;
   GstBuffer* buf = gst_buffer_new_memdup(data, len);
   gst_app_src_push_buffer(GST_APP_SRC(p->appsrc), buf);
@@ -277,7 +277,7 @@ static const char* CAL_FRAGMENT =
   "  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);\n"
   "}\n";
 
-static void livi_set_gamma_player(Player* p, double gamma, double contrast, double gain_r,
+static void avio_set_gamma_player(Player* p, double gamma, double contrast, double gain_r,
                                   double gain_g, double gain_b) {
   if (!p || !p->glshader) return;
   GstStructure* u = gst_structure_new(
@@ -290,7 +290,7 @@ static void livi_set_gamma_player(Player* p, double gamma, double contrast, doub
 
 // Build the decode + waylandsink pipeline for a codec. handle is the native window for the
 // mac/Windows overlay, unused on Linux. Returns NULL on parse failure.
-static Player* livi_create_player(const std::string& codec, guintptr handle) {
+static Player* avio_create_player(const std::string& codec, guintptr handle) {
   // Two queues: before the decoder non-leaky (a stateless HW decoder needs every
   // frame for its reference chain), after the decoder leaky=downstream.
   const char* decoder = decoder_for(codec);
@@ -342,7 +342,7 @@ static Player* livi_create_player(const std::string& codec, guintptr handle) {
   p->appsrc = gst_bin_get_by_name(GST_BIN(pipeline), "src");
   p->sink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
 #ifdef __linux__
-  if (p->sink && !getenv("LIVI_COMPOSITOR_CTRL")) {
+  if (p->sink && !getenv("AVIO_COMPOSITOR_CTRL")) {
     // No external compositor running to embed/crop this bare waylandsink surface (e.g. desktop
     // dev/testing) — ask it to go fullscreen directly via the standard Wayland protocol instead
     // of showing at the decoded frame's native size. When avio-compositor IS present, it owns
@@ -353,7 +353,7 @@ static Player* livi_create_player(const std::string& codec, guintptr handle) {
   p->glshader = gst_bin_get_by_name(GST_BIN(pipeline), "cal");
   if (p->glshader) {
     g_object_set(p->glshader, "fragment", CAL_FRAGMENT, NULL);
-    livi_set_gamma_player(p, 1.0, 1.0, 1.0, 1.0, 1.0);
+    avio_set_gamma_player(p, 1.0, 1.0, 1.0, 1.0, 1.0);
   }
 
   force_sinks_realtime(pipeline);
@@ -379,7 +379,7 @@ static Player* livi_create_player(const std::string& codec, guintptr handle) {
   gst_object_unref(bus);
 
 #ifndef __linux__
-  guintptr overlay = handle ? livi_attach_view(handle, &p->view) : handle;
+  guintptr overlay = handle ? avio_attach_view(handle, &p->view) : handle;
   if (p->sink && GST_IS_VIDEO_OVERLAY(p->sink) && overlay) {
     gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(p->sink), overlay);
   }
@@ -425,7 +425,7 @@ rust::Vec<CodecSupport> gv_probe_codecs() {
 
 std::unique_ptr<Player> gv_create_player(rust::Str codec, uint64_t handle) {
   ensure_init();
-  return std::unique_ptr<Player>(livi_create_player(std::string(codec), (guintptr)handle));
+  return std::unique_ptr<Player>(avio_create_player(std::string(codec), (guintptr)handle));
 }
 
 void gv_start(Player& p) {
@@ -434,7 +434,7 @@ void gv_start(Player& p) {
 
 bool gv_push_buffer(Player& p, rust::Slice<const uint8_t> data) {
   if (!p.appsrc || data.empty() || p.dead.load()) return false;
-  livi_push_player(&p, data.data(), data.size());
+  avio_push_player(&p, data.data(), data.size());
   return true;
 }
 
@@ -443,17 +443,17 @@ bool gv_is_dead(const Player& p) {
 }
 
 void gv_set_visible(Player& p, bool visible) {
-  livi_set_view_hidden(p.view, !visible);
+  avio_set_view_hidden(p.view, !visible);
 }
 
 void gv_set_content_region(Player& p, double cropL, double cropT, double visW, double visH,
     double tierW, double tierH) {
-  if (p.view) livi_set_content_region(p.view, p.sink, cropL, cropT, visW, visH, tierW, tierH);
+  if (p.view) avio_set_content_region(p.view, p.sink, cropL, cropT, visW, visH, tierW, tierH);
 }
 
 void gv_set_gamma(Player& p, double gamma, double contrast, double gain_r, double gain_g,
     double gain_b) {
-  livi_set_gamma_player(&p, gamma, contrast, gain_r, gain_g, gain_b);
+  avio_set_gamma_player(&p, gamma, contrast, gain_r, gain_g, gain_b);
 }
 
 void gv_stop(Player& p) {
@@ -462,22 +462,22 @@ void gv_stop(Player& p) {
 }
 
 void gv_set_backdrop(uint64_t handle, double r, double g, double b) {
-  if (handle) livi_set_backdrop((guintptr)handle, r, g, b);
+  if (handle) avio_set_backdrop((guintptr)handle, r, g, b);
 }
 
 #ifdef __linux__
 // gst-host: runs the pipeline in this separate process with its own GLib main loop. Reads
 // create(1)/data(2)/stop(3) frames from the unix socket the main process serves.
-struct LiviHost {
+struct AvioHost {
   GByteArray* buf;
   GHashTable* players;  // id -> Player*
 };
 
-static void livi_free_player(Player* p) {
+static void avio_free_player(Player* p) {
   delete p;
 }
 
-static void livi_host_dispatch(LiviHost* h, guint8 op, guint32 id, const guint8* rest, gsize rlen) {
+static void avio_host_dispatch(AvioHost* h, guint8 op, guint32 id, const guint8* rest, gsize rlen) {
   gpointer key = GUINT_TO_POINTER(id);
   if (op == 1) {
     char codec[16];
@@ -487,9 +487,9 @@ static void livi_host_dispatch(LiviHost* h, guint8 op, guint32 id, const guint8*
     Player* old = (Player*)g_hash_table_lookup(h->players, key);
     if (old) {
       g_hash_table_remove(h->players, key);
-      livi_free_player(old);
+      avio_free_player(old);
     }
-    Player* p = livi_create_player(codec, 0);
+    Player* p = avio_create_player(codec, 0);
     if (p) {
       gst_element_set_state(p->pipeline, GST_STATE_PLAYING);
       g_hash_table_insert(h->players, key, p);
@@ -501,28 +501,28 @@ static void livi_host_dispatch(LiviHost* h, guint8 op, guint32 id, const guint8*
       // drop this player quietly instead of pushing into a dead pipeline forever. The next
       // create(1) for this id gets a fresh one.
       g_hash_table_remove(h->players, key);
-      livi_free_player(p);
+      avio_free_player(p);
       p = nullptr;
     }
-    livi_push_player(p, rest, rlen);
+    avio_push_player(p, rest, rlen);
   } else if (op == 3) {
     Player* p = (Player*)g_hash_table_lookup(h->players, key);
     if (p) {
       g_hash_table_remove(h->players, key);
-      livi_free_player(p);
+      avio_free_player(p);
     }
   } else if (op == 4) {
     Player* p = (Player*)g_hash_table_lookup(h->players, key);
     if (p && rlen >= 5 * sizeof(double)) {
       double v[5];
       memcpy(v, rest, sizeof(v));
-      livi_set_gamma_player(p, v[0], v[1], v[2], v[3], v[4]);
+      avio_set_gamma_player(p, v[0], v[1], v[2], v[3], v[4]);
     }
   }
 }
 
-static gboolean livi_host_readable(gint fd, GIOCondition cond, gpointer data) {
-  LiviHost* h = (LiviHost*)data;
+static gboolean avio_host_readable(gint fd, GIOCondition cond, gpointer data) {
+  AvioHost* h = (AvioHost*)data;
   if (cond & (G_IO_HUP | G_IO_ERR)) exit(0);
   guint8 chunk[65536];
   ssize_t n = read(fd, chunk, sizeof(chunk));
@@ -536,7 +536,7 @@ static gboolean livi_host_readable(gint fd, GIOCondition cond, gpointer data) {
       guint8* payload = h->buf->data + 4;
       guint32 id;
       memcpy(&id, payload + 1, 4);
-      livi_host_dispatch(h, payload[0], id, payload + 5, len - 5);
+      avio_host_dispatch(h, payload[0], id, payload + 5, len - 5);
     }
     g_byte_array_remove_range(h->buf, 0, 4 + len);
   }
@@ -546,7 +546,7 @@ static gboolean livi_host_readable(gint fd, GIOCondition cond, gpointer data) {
 // Where to drop the crash backtrace (next to the AppImage); set in run_host() before the handler arms.
 static char g_crash_log_path[1024] = {0};
 
-static void livi_host_crash(int sig) {
+static void avio_host_crash(int sig) {
   void* frames[64];
   int n = backtrace(frames, 64);
   const char hdr[] = "\n=== gst-host CRASH backtrace ===\n";
@@ -567,13 +567,13 @@ static void livi_host_crash(int sig) {
 // Connect to the host socket and run the GLib main loop. The separate process is the libffi
 // fix: outside Electron, libwayland binds the system libffi, not Electron's ABI-incompatible
 // bundled copy that corrupts wayland marshalling on resize.
-static void livi_host_main(const char* sockPath, const char* crashLogPath) {
-  g_set_prgname("livi-video");
+static void avio_host_main(const char* sockPath, const char* crashLogPath) {
+  g_set_prgname("avio-video");
   ensure_init();
   if (crashLogPath && crashLogPath[0])
     strncpy(g_crash_log_path, crashLogPath, sizeof(g_crash_log_path) - 1);
-  signal(SIGSEGV, livi_host_crash);
-  signal(SIGABRT, livi_host_crash);
+  signal(SIGSEGV, avio_host_crash);
+  signal(SIGABRT, avio_host_crash);
 
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   struct sockaddr_un addr;
@@ -585,15 +585,15 @@ static void livi_host_main(const char* sockPath, const char* crashLogPath) {
     exit(1);
   }
 
-  LiviHost* h = new LiviHost();
+  AvioHost* h = new AvioHost();
   h->buf = g_byte_array_new();
   h->players = g_hash_table_new(g_direct_hash, g_direct_equal);
-  g_unix_fd_add(fd, (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR), livi_host_readable, h);
+  g_unix_fd_add(fd, (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR), avio_host_readable, h);
 
   g_main_loop_run(g_main_loop_new(NULL, FALSE));
 }
 
 void gv_run_host(rust::Str sock_path, rust::Str crash_path) {
-  livi_host_main(std::string(sock_path).c_str(), std::string(crash_path).c_str());
+  avio_host_main(std::string(sock_path).c_str(), std::string(crash_path).c_str());
 }
 #endif

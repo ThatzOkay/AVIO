@@ -14,7 +14,7 @@
 #include <gst/gst.h>
 #include <gst/video/videooverlay.h>
 
-struct LiviVideoView {
+struct AvioVideoView {
   HWND parent;  // the electron top-level window this plane belongs to
   HWND video;   // our borderless plane window (the d3d11videosink renders into this)
   void* sink;
@@ -23,28 +23,28 @@ struct LiviVideoView {
   bool hidden;
 };
 
-static const wchar_t* kLiviVideoClass = L"LiviVideoPlane";
+static const wchar_t* kAvioVideoClass = L"AvioVideoPlane";
 
-static LRESULT CALLBACK livi_plane_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
+static LRESULT CALLBACK avio_plane_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
   return DefWindowProcW(h, msg, w, l);
 }
 
-static void livi_ensure_class() {
+static void avio_ensure_class() {
   static bool registered = false;
   if (registered) return;
   registered = true;
   WNDCLASSEXW wc;
   ZeroMemory(&wc, sizeof(wc));
   wc.cbSize = sizeof(wc);
-  wc.lpfnWndProc = livi_plane_proc;
+  wc.lpfnWndProc = avio_plane_proc;
   wc.hInstance = GetModuleHandleW(NULL);
   wc.hCursor = NULL;
   wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-  wc.lpszClassName = kLiviVideoClass;
+  wc.lpszClassName = kAvioVideoClass;
   RegisterClassExW(&wc);
 }
 
-static void livi_apply_render_rect(LiviVideoView* v) {
+static void avio_apply_render_rect(AvioVideoView* v) {
   if (!v || !v->sink || !GST_IS_VIDEO_OVERLAY(v->sink) || !IsWindow(v->video)) return;
   RECT rc;
   if (!GetClientRect(v->video, &rc)) return;
@@ -72,7 +72,7 @@ static void livi_apply_render_rect(LiviVideoView* v) {
   gst_video_overlay_expose(ov);
 }
 
-static void livi_sync(LiviVideoView* v) {
+static void avio_sync(AvioVideoView* v) {
   if (!v || !IsWindow(v->parent) || !IsWindow(v->video)) return;
   RECT cr;
   if (!GetClientRect(v->parent, &cr)) return;
@@ -85,23 +85,23 @@ static void livi_sync(LiviVideoView* v) {
   UINT flags = SWP_NOACTIVATE | SWP_NOOWNERZORDER;
   flags |= v->hidden ? SWP_HIDEWINDOW : SWP_SHOWWINDOW;
   SetWindowPos(v->video, v->parent, x, y, w, h, flags);
-  if (w != v->lastW || h != v->lastH) livi_apply_render_rect(v);
+  if (w != v->lastW || h != v->lastH) avio_apply_render_rect(v);
 }
 
 // Subclass on the PARENT (electron) window: keep the plane under it
-static LRESULT CALLBACK livi_parent_proc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR id,
+static LRESULT CALLBACK avio_parent_proc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR id,
                                          DWORD_PTR ref) {
-  LiviVideoView* v = reinterpret_cast<LiviVideoView*>(ref);
+  AvioVideoView* v = reinterpret_cast<AvioVideoView*>(ref);
   switch (msg) {
     case WM_WINDOWPOSCHANGED:
     case WM_MOVE:
     case WM_SIZE:
     case WM_SHOWWINDOW:
     case WM_ACTIVATE:
-      livi_sync(v);
+      avio_sync(v);
       break;
     case WM_NCDESTROY:
-      RemoveWindowSubclass(h, livi_parent_proc, id);
+      RemoveWindowSubclass(h, avio_parent_proc, id);
       break;
     default:
       break;
@@ -109,12 +109,12 @@ static LRESULT CALLBACK livi_parent_proc(HWND h, UINT msg, WPARAM w, LPARAM l, U
   return DefSubclassProc(h, msg, w, l);
 }
 
-extern "C" guintptr livi_attach_view(guintptr parent, void** outView) {
+extern "C" guintptr avio_attach_view(guintptr parent, void** outView) {
   *outView = nullptr;
   HWND parentHwnd = reinterpret_cast<HWND>(static_cast<uintptr_t>(parent));
   if (!parentHwnd || !IsWindow(parentHwnd)) return parent;
 
-  livi_ensure_class();
+  avio_ensure_class();
 
   RECT cr = {0, 0, 0, 0};
   GetClientRect(parentHwnd, &cr);
@@ -122,12 +122,12 @@ extern "C" guintptr livi_attach_view(guintptr parent, void** outView) {
   ClientToScreen(parentHwnd, &tl);
 
   HWND video = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
-                               kLiviVideoClass, L"", WS_POPUP, tl.x, tl.y,
+                               kAvioVideoClass, L"", WS_POPUP, tl.x, tl.y,
                                cr.right - cr.left, cr.bottom - cr.top, NULL, NULL,
                                GetModuleHandleW(NULL), NULL);
   if (!video) return parent;
 
-  LiviVideoView* v = new LiviVideoView();
+  AvioVideoView* v = new AvioVideoView();
   v->parent = parentHwnd;
   v->video = video;
   v->sink = nullptr;
@@ -135,26 +135,26 @@ extern "C" guintptr livi_attach_view(guintptr parent, void** outView) {
   v->lastW = v->lastH = 0;
   v->hidden = false;
 
-  SetWindowSubclass(parentHwnd, livi_parent_proc, reinterpret_cast<UINT_PTR>(v),
+  SetWindowSubclass(parentHwnd, avio_parent_proc, reinterpret_cast<UINT_PTR>(v),
                     reinterpret_cast<DWORD_PTR>(v));
-  livi_sync(v);
+  avio_sync(v);
 
   *outView = v;
   return reinterpret_cast<guintptr>(video);  // the sink renders into the plane window
 }
 
-extern "C" void livi_set_view_hidden(void* view, bool hidden) {
-  LiviVideoView* v = reinterpret_cast<LiviVideoView*>(view);
+extern "C" void avio_set_view_hidden(void* view, bool hidden) {
+  AvioVideoView* v = reinterpret_cast<AvioVideoView*>(view);
   if (!v || !IsWindow(v->video)) return;
   v->hidden = hidden;
   ShowWindow(v->video, hidden ? SW_HIDE : SW_SHOWNOACTIVATE);
-  if (!hidden) livi_sync(v);  // re-pin under the parent when re-shown
+  if (!hidden) avio_sync(v);  // re-pin under the parent when re-shown
 }
 
 // Set the content region (crop offsets + visible size within the decoded tier)
-extern "C" void livi_set_content_region(void* view, void* sink, double cropL, double cropT,
+extern "C" void avio_set_content_region(void* view, void* sink, double cropL, double cropT,
                                         double visW, double visH, double tierW, double tierH) {
-  LiviVideoView* v = reinterpret_cast<LiviVideoView*>(view);
+  AvioVideoView* v = reinterpret_cast<AvioVideoView*>(view);
   if (!v) return;
   v->sink = sink;
   v->cropL = cropL;
@@ -164,20 +164,20 @@ extern "C" void livi_set_content_region(void* view, void* sink, double cropL, do
   v->tierW = tierW;
   v->tierH = tierH;
   v->lastW = v->lastH = 0;
-  livi_apply_render_rect(v);
+  avio_apply_render_rect(v);
 }
 
-extern "C" void livi_remove_view(void* view) {
-  LiviVideoView* v = reinterpret_cast<LiviVideoView*>(view);
+extern "C" void avio_remove_view(void* view) {
+  AvioVideoView* v = reinterpret_cast<AvioVideoView*>(view);
   if (!v) return;
   if (IsWindow(v->parent)) {
-    RemoveWindowSubclass(v->parent, livi_parent_proc, reinterpret_cast<UINT_PTR>(v));
+    RemoveWindowSubclass(v->parent, avio_parent_proc, reinterpret_cast<UINT_PTR>(v));
   }
   if (IsWindow(v->video)) DestroyWindow(v->video);
   delete v;
 }
 
-extern "C" void livi_set_backdrop(guintptr parent, double r, double g, double b) {
+extern "C" void avio_set_backdrop(guintptr parent, double r, double g, double b) {
   (void)parent;
   (void)r;
   (void)g;

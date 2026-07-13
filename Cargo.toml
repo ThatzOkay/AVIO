@@ -1,2 +1,9 @@
 [workspace]
-members = ["src-tauri/crates/*", "src-tauri"]
+# avio-compositor is a meson/C project (no Cargo.toml), so it's listed explicitly rather than
+# via a "src-tauri/crates/*" glob (which would require every crates/* dir to be a Cargo crate).
+members = [
+    "src-tauri/crates/aa-proto",
+    "src-tauri/crates/gst-video",
+    "src-tauri/crates/tauri-plugin-rtl-sdr",
+    "src-tauri",
+]

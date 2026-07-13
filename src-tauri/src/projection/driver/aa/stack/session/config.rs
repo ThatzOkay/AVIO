@@ -1,5 +1,5 @@
 //! Per-session configuration: HU identity, advertised video/display geometry, sensors,
-//! Bluetooth/WiFi projection details. Mirrors LIVI's `Session.ts` `SessionConfig`.
+//! Bluetooth/WiFi projection details. Mirrors AVIO's `Session.ts` `SessionConfig`.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoCodec {

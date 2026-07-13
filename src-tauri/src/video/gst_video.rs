@@ -142,7 +142,7 @@ struct CompositorControl {
 impl CompositorControl {
     fn new() -> Self {
         Self {
-            path: std::env::var("LIVI_COMPOSITOR_CTRL")
+            path: std::env::var("AVIO_COMPOSITOR_CTRL")
                 .ok()
                 .filter(|s| !s.is_empty()),
             ..Default::default()

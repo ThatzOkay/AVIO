@@ -11,22 +11,22 @@
 // Elsewhere (Linux) there is no in-process overlay: the pipeline hands frames to waylandsink
 // directly and these are no-ops.
 #if defined(__APPLE__) || defined(_WIN32)
-extern "C" guintptr livi_attach_view(guintptr parent, void** outView);
-extern "C" void livi_remove_view(void* view);
-extern "C" void livi_set_view_hidden(void* view, bool hidden);
-extern "C" void livi_set_content_region(void* view, void* sink, double cropL,
+extern "C" guintptr avio_attach_view(guintptr parent, void** outView);
+extern "C" void avio_remove_view(void* view);
+extern "C" void avio_set_view_hidden(void* view, bool hidden);
+extern "C" void avio_set_content_region(void* view, void* sink, double cropL,
     double cropT, double visW, double visH, double tierW, double tierH);
-extern "C" void livi_set_backdrop(guintptr parent, double r, double g, double b);
+extern "C" void avio_set_backdrop(guintptr parent, double r, double g, double b);
 #else
-[[maybe_unused]] static guintptr livi_attach_view(guintptr parent, void** outView) {
+[[maybe_unused]] static guintptr avio_attach_view(guintptr parent, void** outView) {
   *outView = nullptr;
   return parent;
 }
-[[maybe_unused]] static void livi_remove_view(void*) {}
-[[maybe_unused]] static void livi_set_view_hidden(void*, bool) {}
-[[maybe_unused]] static void livi_set_content_region(void*, void*, double, double, double, double,
+[[maybe_unused]] static void avio_remove_view(void*) {}
+[[maybe_unused]] static void avio_set_view_hidden(void*, bool) {}
+[[maybe_unused]] static void avio_set_content_region(void*, void*, double, double, double, double,
     double, double) {}
-[[maybe_unused]] static void livi_set_backdrop(guintptr, double, double, double) {}
+[[maybe_unused]] static void avio_set_backdrop(guintptr, double, double, double) {}
 #endif
 
 // One decode pipeline + its (optional) native overlay view. Torn down in the destructor, so a

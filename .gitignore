@@ -15,6 +15,9 @@ dist-ssr
 # gst-host sidecar binary, rebuilt by scripts/build-gst-host-sidecar.ts before dev/build
 src-tauri/binaries
 
+# avio-compositor bundle, rebuilt by scripts/build-avio-compositor-sidecar.ts before dev/build
+src-tauri/compositor
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -25,3 +28,5 @@ src-tauri/binaries
 *.njsproj
 *.sln
 *.sw?
+
+target

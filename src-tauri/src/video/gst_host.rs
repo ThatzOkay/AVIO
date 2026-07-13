@@ -108,8 +108,8 @@ impl GstHost {
             .env("GST_GL_WINDOW", "surfaceless")
             .env("GST_GL_PLATFORM", "egl")
             .kill_on_drop(true);
-        // LIVI_GST_PRELOAD LD_PRELOADs an override lib into the gst-host child only.
-        if let Ok(preload) = std::env::var("LIVI_GST_PRELOAD") {
+        // AVIO_GST_PRELOAD LD_PRELOADs an override lib into the gst-host child only.
+        if let Ok(preload) = std::env::var("AVIO_GST_PRELOAD") {
             command.env("LD_PRELOAD", preload);
         }
 
