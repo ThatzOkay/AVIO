@@ -1,2 +1,6 @@
-[wrap-redirect]
-filename = wlroots/subprojects/wayland.wrap
+[wrap-git]
+url = https://gitlab.freedesktop.org/wayland/wayland.git
+revision = HEAD
+
+[provide]
+dependency_names = wayland-client, wayland-cursor, wayland-egl, wayland-scanner, wayland-server

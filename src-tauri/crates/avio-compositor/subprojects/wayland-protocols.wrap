@@ -1,2 +1,6 @@
-[wrap-redirect]
-filename = wlroots/subprojects/wayland-protocols.wrap
+[wrap-git]
+url = https://gitlab.freedesktop.org/wayland/wayland-protocols.git
+revision = HEAD
+
+[provide]
+dependency_names = wayland-protocols
