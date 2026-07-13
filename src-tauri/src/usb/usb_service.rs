@@ -8,6 +8,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 use tauri::{AppHandle, Emitter};
 
+use crate::projection::driver::aa::stack::aoap::handshake::is_accessory_mode;
 use crate::usb::udev_rule::phone_vendor_ids_from_udev_template;
 
 const NON_PHONE_INTERFACE_CLASSES: [u8; 10] = [
@@ -109,6 +110,9 @@ impl UsbService {
         println!("[UsbService] Device connected: {:?}", device);
         self.known_devices.insert(device.id(), device.clone());
         if !is_dongle {
+            if !self.last_phone_state && !self.is_phone_suspend_window() && self.is_phone_candidate(&device) {
+                self.mark_phone_attached(device.clone());
+            }
             self.broadcast_generic_usb_event("attach", device);
         }
     }
@@ -132,6 +136,9 @@ impl UsbService {
         let is_dongle = self.is_dongle(&device);
         println!("[UsbService] Device disconnected: {:?}", device);
         if !is_dongle {
+            if self.is_same_phone_device(&device) {
+                self.mark_phone_detached(&device);
+            }
             self.broadcast_generic_usb_event("detach", device);
         }
     }
@@ -185,14 +192,20 @@ impl UsbService {
             }
         };
 
-        let accessory = devices.iter().find(|d| false); // todo aosp accesory check
+        let accessory = devices.iter().find(|d| is_accessory_mode(d));
         if let Some(accessory) = accessory {
+            println!("[UsbService] Found device in accessory mode: {:?}", accessory);
             self.mark_phone_attached(accessory.clone());
         }
 
+        println!("[UsbService] Scanning for candidate phone devices...");
+
         let condidate = devices.iter().find(|d| self.is_phone_candidate(d));
         if let Some(candidate) = condidate {
+            println!("[UsbService] Found candidate phone device: {:?}", candidate);
             self.mark_phone_attached(candidate.clone());
+        } else {
+            println!("[UsbService] No candidate phone devices found.");
         }
     }
 
@@ -210,15 +223,25 @@ impl UsbService {
             .unwrap_or_default()
             .as_millis() as u32;
         self.last_phone_state = true;
-        self.connected_phone_device = Some(device);
         self.phone_suspend_until = now + PHONE_REENUM_SUPRESS_MS;
-        // projection.mark_phone_connected(true, device);
+
+        let wired_device = device.clone();
+        let app = self.app.clone();
+        self.connected_phone_device = Some(device);
+        tauri::async_runtime::spawn(async move {
+            crate::projection::driver::aa::wired_driver::connect_wired(app, wired_device).await;
+        });
     }
 
     fn mark_phone_detached(self: &mut Self, _device: &nusb::DeviceInfo) {
         self.last_phone_state = false;
         self.connected_phone_device = None;
-        self.phone_suspend_until = 0;
+        // Deliberately NOT resetting phone_suspend_until here: AOAP re-enumeration disconnects
+        // and reconnects the *same* physical phone under a different vendor/product ID pair
+        // mid-handshake. Zeroing the suspend window on that disconnect let on_connect treat the
+        // freshly re-enumerated accessory-mode device as a brand-new phone and spawn a second,
+        // racing connect_wired against the first one's own re-enumeration wait — hence "interface
+        // is busy". Leaving phone_suspend_until alone lets it expire naturally on its own timer.
         // projection.mark_phone_connected(false);
     }
 
@@ -229,7 +252,7 @@ impl UsbService {
 
         let class = device.class();
 
-        if class == 0x00 && class != 0xFF {
+        if class != 0x00 && class != 0xFF {
             return false;
         }
 

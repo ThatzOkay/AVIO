@@ -1,6 +1,0 @@
-cargo:rerun-if-changed=permissions
-cargo:PERMISSION_FILES_PATH=/home/thatzokay/Projects/rust/avio/target/debug/build/tauri-plugin-rtl-sdr-216bd2ec498b26cd/out/tauri-plugin-rtl-sdr-permission-files
-cargo:rerun-if-env-changed=REMOVE_UNUSED_COMMANDS
-cargo:rustc-check-cfg=cfg(mobile)
-cargo:rustc-check-cfg=cfg(desktop)
-cargo:rustc-cfg=desktop

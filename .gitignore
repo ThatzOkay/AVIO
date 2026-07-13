@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# gst-host sidecar binary, rebuilt by scripts/build-gst-host-sidecar.ts before dev/build
+src-tauri/binaries
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

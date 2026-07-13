@@ -2,19 +2,20 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "avio",
   "version": "0.1.0",
-  "identifier": "com.thatzokay.avio",
+  "identifier": "nl.thatzokay.avio",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "bun scripts/build-gst-host-sidecar.ts && bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "bun scripts/build-gst-host-sidecar.ts && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "title": "avio",
-        "width": 800,
-        "height": 480
+        "decorations": false,
+        "resizable": false,
+        "fullscreen": true
       }
     ],
     "security": {
@@ -24,6 +25,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/gst-host"
+    ],
     "resources": [
       "assets/**/*"
     ],

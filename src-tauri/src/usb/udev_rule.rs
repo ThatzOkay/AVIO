@@ -14,7 +14,7 @@ const RULE_FILE: &str = "/etc/udev/rules.d/99-AVIO.rules";
 
 const TEMPLATE_FILENAME: &str = "99-AVIO.rules.template";
 
-fn resolve_template_path(app: tauri::AppHandle) -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn resolve_template_path(app: tauri::AppHandle) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let base = app.path().resolve("assets", BaseDirectory::Resource);
     if base.is_err() {
         return Err(Box::new(std::io::Error::new(
@@ -30,7 +30,7 @@ fn resolve_template_path(app: tauri::AppHandle) -> Result<PathBuf, Box<dyn std::
 
 static CACHED_PHONE_VENDOR_IDS: Mutex<Option<HashSet<u16>>> = Mutex::new(None);
 
-fn load_template(app: tauri::AppHandle) -> Result<String, Box<dyn std::error::Error>> {
+fn load_template(app: tauri::AppHandle) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let template_path = resolve_template_path(app)?;
     let template_content = std::fs::read_to_string(template_path)?;
     Ok(template_content)
@@ -40,7 +40,7 @@ fn load_template(app: tauri::AppHandle) -> Result<String, Box<dyn std::error::Er
 // Lines that also match an idProduct (dongle) are skipped.
 pub fn phone_vendor_ids_from_udev_template(
     app: AppHandle,
-) -> Result<HashSet<u16>, Box<dyn std::error::Error>> {
+) -> Result<HashSet<u16>, Box<dyn std::error::Error + Send + Sync>> {
     {
         let cache = CACHED_PHONE_VENDOR_IDS.lock().unwrap();
         if let Some(ids) = &*cache {
@@ -71,13 +71,13 @@ pub fn phone_vendor_ids_from_udev_template(
 }
 
 fn template_marker(template: &str) -> String {
-    let re = Regex::new(r"(?m)^# LIVI-RULE-VERSION=\d+$").unwrap();
+    let re = Regex::new(r"(?m)^# AVIO-RULE-VERSION=\d+$").unwrap();
     re.find(template)
         .map(|m| m.as_str().to_string())
-        .unwrap_or_else(|| "# LIVI-RULE-VERSION=0".to_string())
+        .unwrap_or_else(|| "# AVIO-RULE-VERSION=0".to_string())
 }
 
-fn resolve_username() -> Result<String, Box<dyn std::error::Error>> {
+fn resolve_username() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // Falls back through env vars first since they're cheap,
     // then asks the OS directly via libc/uid lookup.
     if let Ok(username) = std::env::var("USER").or_else(|_| std::env::var("USERNAME")) {
@@ -87,7 +87,7 @@ fn resolve_username() -> Result<String, Box<dyn std::error::Error>> {
     whoami::username().map_err(|e| e.into())
 }
 
-fn build_rule_content(app: &AppHandle) -> Result<String, Box<dyn std::error::Error>> {
+fn build_rule_content(app: &AppHandle) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let template = load_template(app.clone())?;
     let username = resolve_username()?;
     let content = template.replace("__USERNAME__", &username);
@@ -98,7 +98,7 @@ pub fn udev_rule_exists() -> bool {
     std::path::Path::new(RULE_FILE).exists()
 }
 
-fn udev_rule_is_current(app: &AppHandle) -> Result<bool, Box<dyn std::error::Error>> {
+fn udev_rule_is_current(app: &AppHandle) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     if !std::path::Path::new(RULE_FILE).exists() {
         return Ok(false);
     }
@@ -116,7 +116,7 @@ fn pkexec_available() -> bool {
         .unwrap_or(false)
 }
 
-async fn install_rule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+async fn install_rule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let content = build_rule_content(app)?;
     let script = [
         format!("echo \"{}\" > {}", content.trim(), RULE_FILE),
@@ -208,27 +208,31 @@ pub async fn check_and_install_udev_rule(app: &AppHandle) -> bool {
 
     let mut installed = false;
     while !installed {
-        let result = install_rule(app).await;
-        if result.is_ok() {
-            installed = true;
-        }
+        match install_rule(app).await {
+            Ok(()) => {
+                installed = true;
+            }
+            Err(e) => {
+                eprintln!("Failed to install udev rule: {:?}", e);
 
-        let (tx, rx) = oneshot::channel();
-        app.dialog()
-            .message("Could not install the udev rule. \n The authorization was cancelled or the password was wrong.")
-            .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-            .title("Installation Failed")
-            .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom(
-                "Retry".to_string(),
-                "Skip".to_string(),
-            ))
-            .show(move |confirmed| {
-                let _ = tx.send(confirmed);
-            });
+                let (tx, rx) = oneshot::channel();
+                app.dialog()
+                    .message("Could not install the udev rule. \n The authorization was cancelled or the password was wrong.")
+                    .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                    .title("Installation Failed")
+                    .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom(
+                        "Retry".to_string(),
+                        "Skip".to_string(),
+                    ))
+                    .show(move |confirmed| {
+                        let _ = tx.send(confirmed);
+                    });
 
-        let confirmed = rx.await.unwrap_or(false);
-        if !confirmed {
-            break;
+                let confirmed = rx.await.unwrap_or(false);
+                if !confirmed {
+                    return false;
+                }
+            }
         }
     }
 
