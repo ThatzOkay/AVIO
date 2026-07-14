@@ -166,20 +166,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-              build-essential curl wget file pkg-config ca-certificates \
-              libssl-dev \
-              libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
-              protobuf-compiler \
-              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-              librtlsdr-dev libudev-dev libasound2-dev libva2 \
-              ninja-build bison patchelf \
-              libegl-dev libgles-dev libgbm-dev libcairo2-dev \
-              libxkbcommon-dev libpixman-1-dev \
-              libffi-dev libexpat1-dev \
-              xdg-utils \
-              python3 python3-dev python3-pip
+          # ports.ubuntu.com (arm64's mirror) is far less redundantly mirrored than
+          # the main x86_64 archive and occasionally 404s on individual package files
+          # mid-sync - retry the whole update+install rather than failing on a flake.
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+                build-essential curl wget file pkg-config ca-certificates \
+                libssl-dev \
+                libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
+                protobuf-compiler \
+                libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+                librtlsdr-dev libudev-dev libasound2-dev libva2 \
+                ninja-build bison patchelf \
+                libegl-dev libgles-dev libgbm-dev libcairo2-dev \
+                libxkbcommon-dev libpixman-1-dev \
+                libffi-dev libexpat1-dev \
+                xdg-utils \
+                python3 python3-dev python3-pip; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "apt-get failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "apt-get attempt $attempt failed, retrying in 10s..." >&2
+            sleep 10
+          done
           sudo rm -rf /var/lib/apt/lists/*
           # avio-compositor's meson.build force-builds the vendored wlroots/wayland
           # wraps, which need meson >=1.4; Ubuntu's apt meson is usually older.
