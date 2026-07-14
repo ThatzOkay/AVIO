@@ -42,8 +42,6 @@ pub fn run() {
         .setup(|app: &mut tauri::App| {
             let main_window = app.get_webview_window("main").unwrap();
 
-            main_window.hide().ok();
-
             if let Some(monitor) = main_window.current_monitor().ok().flatten() {
                 main_window.set_size(*monitor.size()).ok();
                 main_window.center().ok();
