@@ -110,6 +110,7 @@ fn udev_rule_is_current(app: &AppHandle) -> Result<bool, Box<dyn std::error::Err
 // Tells the nested avio-compositor (if we're running under one) to re-exec itself once our
 // toplevel goes away, instead of tearing down the whole kiosk session (cage/login/getty) — see
 // avio-compositor.c's "restart" control-socket command and `full_restart` flag.
+#[cfg(target_os = "linux")]
 fn request_compositor_restart() {
     let Ok(path) = std::env::var("AVIO_COMPOSITOR_CTRL") else {
         return;
@@ -119,6 +120,9 @@ fn request_compositor_restart() {
         let _ = sock.write_all(b"restart\n");
     }
 }
+
+#[cfg(not(target_os = "linux"))]
+fn request_compositor_restart() {}
 
 fn pkexec_available() -> bool {
     std::process::Command::new("which")
