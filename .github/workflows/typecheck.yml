@@ -89,7 +89,8 @@ jobs:
             protobuf-compiler \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
-            librtlsdr-dev
+            librtlsdr-dev \
+            libasound2-dev
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
