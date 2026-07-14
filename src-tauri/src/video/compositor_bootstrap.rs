@@ -1,4 +1,6 @@
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 
 /// Linux only: spawn the nested `avio-compositor` and re-exec this same binary as its inner

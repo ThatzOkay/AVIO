@@ -7,9 +7,38 @@ use std::{
 };
 
 use tauri::Manager;
-use tokio::{io::AsyncWriteExt, net::UnixStream, sync::Mutex};
+use tokio::{io::AsyncWriteExt, sync::Mutex};
 
 use crate::video::gst_host::{self, GstHost, GstHostHandle};
+
+// `CompositorControl` (below) is Linux only in practice - every real call into it is already
+// gated behind `use_host_process()` (`cfg!(target_os = "linux")`) - but tokio has no unix-socket
+// support on Windows at all, so the type still needs to exist and compile everywhere.
+#[cfg(target_os = "linux")]
+use tokio::net::UnixStream;
+
+#[cfg(not(target_os = "linux"))]
+mod no_unix_socket {
+    use std::io;
+
+    #[derive(Debug)]
+    pub struct UnixStream(std::convert::Infallible);
+
+    impl UnixStream {
+        pub async fn connect(_path: impl AsRef<std::path::Path>) -> io::Result<Self> {
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "unix sockets are unavailable on this platform",
+            ))
+        }
+
+        pub async fn write_all(&mut self, _buf: &[u8]) -> io::Result<()> {
+            match self.0 {}
+        }
+    }
+}
+#[cfg(not(target_os = "linux"))]
+use no_unix_socket::UnixStream;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GstVideoCodec {

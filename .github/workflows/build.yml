@@ -470,7 +470,13 @@ jobs:
           BADGE_DIR="$(mktemp -d)"
           cd "$BADGE_DIR"
 
-          git clone --depth=1 --branch version "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}" .
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}"
+          if ! git clone --depth=1 --branch version "$REPO_URL" . 2>/dev/null; then
+            echo "version branch doesn't exist yet - creating it as an orphan branch"
+            git init -q .
+            git remote add origin "$REPO_URL"
+            git checkout -q --orphan version
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -497,4 +503,4 @@ jobs:
           fi
 
           git commit -m "chore(badges): ${BRANCH_NAME} -> v${APP_VERSION}"
-          git push
+          git push origin version
