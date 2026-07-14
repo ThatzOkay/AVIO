@@ -178,6 +178,7 @@ jobs:
               libegl-dev libgles-dev libgbm-dev libcairo2-dev \
               libxkbcommon-dev libpixman-1-dev \
               libffi-dev libexpat1-dev \
+              xdg-utils \
               python3 python3-dev python3-pip
           sudo rm -rf /var/lib/apt/lists/*
           # avio-compositor's meson.build force-builds the vendored wlroots/wayland
@@ -194,6 +195,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # tauri-bundler swallows linuxdeploy's real stderr and reports just
+          # "failed to run linuxdeploy" unless the log level is above Error -
+          # --verbose surfaces the actual underlying failure if this errors again.
+          args: '--verbose'
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
 
@@ -350,10 +355,26 @@ jobs:
           "GSTREAMER_1_0_ROOT_MSVC_X86_64=$shortRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$root\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
+      # aa-proto's build.rs invokes protoc with all 311 .proto files as separate
+      # args. Chocolatey's protoc is a .bat shim that runs through `cmd.exe /C`,
+      # whose ~8191-char command-line limit that many file paths blows straight
+      # through (os error 206 / ERROR_FILENAME_EXCED_RANGE). Downloading the
+      # official release zip gives a plain protoc.exe invoked directly via
+      # CreateProcess instead, which supports the full ~32K char limit.
       - name: Install protoc [windows]
         if: matrix.os == 'windows'
         shell: pwsh
-        run: choco install protoc -y --no-progress
+        env:
+          PROTOC_VERSION: '35.1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'protoc'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
+          curl.exe -fL $url -o "$dir\protoc.zip"
+          Expand-Archive -Path "$dir\protoc.zip" -DestinationPath $dir -Force
+          "PROTOC=$dir\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$dir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       # librtlsdr for Windows (DLL + generated MSVC import lib) is vendored under
       # src-tauri/crates/tauri-plugin-rtl-sdr/vendor/windows-x64/ - see the README

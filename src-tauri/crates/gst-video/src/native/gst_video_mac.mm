@@ -79,7 +79,7 @@
 
 extern "C" guintptr avio_attach_view(guintptr parent, void** outView) {
   *outView = nullptr;
-  NSView* p = (NSView*)(void*)parent;
+  NSView* p = (__bridge NSView*)(void*)parent;
   if (!p) return parent;
 
   AVIOClipView* clip = [[AVIOClipView alloc] initWithFrame:[p bounds]];
@@ -116,8 +116,8 @@ extern "C" guintptr avio_attach_view(guintptr parent, void** outView) {
              object:win];
   }
 
-  *outView = (void*)clip;       // tracked view
-  return (guintptr)(void*)gl;   // the GL sink renders into the child
+  *outView = (__bridge void*)clip;       // tracked view
+  return (guintptr)(__bridge void*)gl;   // the GL sink renders into the child
 }
 
 // Set the content region (crop) and re-lay-out
@@ -125,7 +125,7 @@ extern "C" void avio_set_content_region(void* view, void* sink, double cropL,
     double cropT, double visW, double visH, double tierW, double tierH) {
   (void)sink;
   if (!view) return;
-  AVIOClipView* clip = (AVIOClipView*)view;
+  AVIOClipView* clip = (__bridge AVIOClipView*)view;
   clip->_cropL = cropL;
   clip->_cropT = cropT;
   clip->_visW = visW;
@@ -137,14 +137,14 @@ extern "C" void avio_set_content_region(void* view, void* sink, double cropL,
 
 extern "C" void avio_remove_view(void* view) {
   if (!view) return;
-  NSView* v = (NSView*)view;
+  NSView* v = (__bridge NSView*)view;
   [[NSNotificationCenter defaultCenter] removeObserver:v];
   [v removeFromSuperview];
 }
 
 extern "C" void avio_set_view_hidden(void* view, bool hidden) {
   if (!view) return;
-  NSView* v = (NSView*)view;
+  NSView* v = (__bridge NSView*)view;
   if ([v isKindOfClass:[AVIOClipView class]]) {
     [(AVIOClipView*)v setUserHidden:hidden];
     return;
@@ -153,7 +153,7 @@ extern "C" void avio_set_view_hidden(void* view, bool hidden) {
 }
 
 extern "C" void avio_set_backdrop(guintptr parent, double r, double g, double b) {
-  NSView* p = (NSView*)(void*)parent;
+  NSView* p = (__bridge NSView*)(void*)parent;
   if (!p) return;
   [p setWantsLayer:YES];
   if (!p.layer) return;
