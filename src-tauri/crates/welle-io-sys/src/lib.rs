@@ -9,12 +9,19 @@ mod ffi {
 
         fn new_welle_io_bridge() -> UniquePtr<WelleIoBridge>;
         fn ping(self: &WelleIoBridge) -> i32;
+        #[allow(dead_code)]
         unsafe fn setReceiver(self: Pin<&mut WelleIoBridge>, receiver: *mut RadioReceiver);
+        #[allow(dead_code)]
         fn setSnrCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(f32));
+        #[allow(dead_code)]
         fn setSignalPresenceCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(bool));
+        #[allow(dead_code)]
         fn setServiceDetectedCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(u32, String));
+        #[allow(dead_code)]
         fn setNewAudioCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(Vec<i16>, i32, bool));
+        #[allow(dead_code)]
         fn setNewDynamicLabelCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(String));
+        #[allow(dead_code)]
         fn setMotCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(motfile: &mot_file_t));
     }
 }
