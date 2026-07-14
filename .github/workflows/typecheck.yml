@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
+          submodules: recursive
 
       - name: Setup latest Node.js 24.x
         uses: actions/setup-node@v6
