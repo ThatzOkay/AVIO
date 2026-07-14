@@ -383,6 +383,7 @@ dependencies = [
  "tauri-plugin-rtl-sdr",
  "tauri-plugin-store",
  "tokio",
+ "welle-io-sys",
  "whoami",
 ]
 
@@ -6175,6 +6176,16 @@ dependencies = [
  "thiserror 2.0.18",
  "windows",
  "windows-core 0.61.2",
+]
+
+[[package]]
+name = "welle-io-sys"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-build",
+ "num-complex",
+ "tokio",
 ]
 
 [[package]]

@@ -34,6 +34,7 @@ evno = "1"
 tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 tauri-plugin-rtl-sdr = { path = "crates/tauri-plugin-rtl-sdr" }
+welle-io-sys = { path = "crates/welle-io-sys" }
 tauri-plugin-store = "2"
 gst-video = { path = "crates/gst-video" }
 aa-proto = { path = "crates/aa-proto" }
