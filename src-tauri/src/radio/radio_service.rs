@@ -34,7 +34,7 @@ pub struct RadioService {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct DabStation {
+pub struct DabStation {
     id: u32,
     label: String,
     channel: u32,
@@ -60,7 +60,7 @@ impl RadioService {
         }
     }
 
-    pub fn init(self: &mut Self) {
+    pub fn init(&mut self) {
         let store = match self.app.store("config.json") {
             Ok(store) => store,
             Err(e) => {
@@ -111,7 +111,7 @@ impl RadioService {
     fn broadcast_fm_state(&self) {
         let state = self.get_fm_state();
         let app = self.app.clone();
-        app.emit("fm-state", state);
+        let _ = app.emit("fm-state", state);
     }
 
     pub fn set_mode(&mut self, mode: RadioMode) {

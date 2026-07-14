@@ -127,6 +127,7 @@ pub struct Session {
     // Rolling trace of the last few encrypted frames fed to TLS (channel_id, flags, len),
     // dumped if a feed() ever fails — helps spot a record-ordering/sequencing bug that a single
     // failing frame in isolation can't show.
+    #[allow(dead_code)]
     recent_frames: std::collections::VecDeque<(u8, u8, usize)>,
 }
 
@@ -474,7 +475,6 @@ impl Session {
             let mut outbox: Vec<(u8, u8, u16, Vec<u8>)> = Vec::new();
             let mut send = |c: u8, f: u8, m: u16, d: &[u8]| outbox.push((c, f, m, d.to_vec()));
             let event = self.control.handle_message(msg_id, payload, &mut send);
-            drop(send);
             for (c, f, m, d) in outbox {
                 self.send_aa(c, f, m, &d).await?;
             }
@@ -625,7 +625,6 @@ impl Session {
         } else {
             self.cluster.handle_message(msg_id, payload, &mut send)
         };
-        drop(send);
         for (c, f, m, d) in outbox {
             self.send_aa(c, f, m, &d).await?;
         }
@@ -658,7 +657,6 @@ impl Session {
             .get_mut(&channel_id)
             .expect("checked contains_key above")
             .handle_message(msg_id, payload, &mut send);
-        drop(send);
         for (c, f, m, d) in outbox {
             self.send_aa(c, f, m, &d).await?;
         }
@@ -687,7 +685,6 @@ impl Session {
         let mut outbox: Vec<(u8, u8, u16, Vec<u8>)> = Vec::new();
         let mut send = |c: u8, f: u8, m: u16, d: &[u8]| outbox.push((c, f, m, d.to_vec()));
         let event = self.mic.handle_message(msg_id, payload, &mut send);
-        drop(send);
         for (c, f, m, d) in outbox {
             self.send_aa(c, f, m, &d).await?;
         }
@@ -740,7 +737,6 @@ impl Session {
                 let mut outbox: Vec<(u8, u8, u16, Vec<u8>)> = Vec::new();
                 let mut send = |c: u8, f: u8, m: u16, d: &[u8]| outbox.push((c, f, m, d.to_vec()));
                 ControlChannel::send_channel_open_response(STATUS_OK, &mut send);
-                drop(send);
                 for (c, f, m, d) in outbox {
                     self.send_aa(c, f, m, &d).await?;
                 }
@@ -924,7 +920,6 @@ impl Session {
         let mut outbox: Vec<(u8, u8, u16, Vec<u8>)> = Vec::new();
         let mut send = |c: u8, f: u8, m: u16, d: &[u8]| outbox.push((c, f, m, d.to_vec()));
         self.mic.push_pcm(data, timestamp_ns, &mut send);
-        drop(send);
         for (c, f, m, d) in outbox {
             self.send_aa(c, f, m, &d).await?;
         }
@@ -948,5 +943,5 @@ impl Session {
 }
 
 fn io_err(e: impl std::fmt::Display) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+    std::io::Error::other(e.to_string())
 }

@@ -1,9 +1,10 @@
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import vuetify from 'vite-plugin-vuetify'
-import VueRouter from "vue-router/vite";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
+import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
+import vuetify from "vite-plugin-vuetify";
+import VueRouter from "vue-router/vite";
+
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/

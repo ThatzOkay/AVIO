@@ -92,12 +92,12 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
     // handle does not cancel its background task (a JoinHandle drop just detaches it), which
     // would otherwise leave its TcpListener on the loopback port bound forever, breaking the
     // next connect attempt with "Address already in use".
-    loop {
+    'bridge_wait: {
         let event = tokio::select! {
             event = bridge_rx.recv() => event,
-            () = handle.shutdown_notify().notified() => break,
+            () = handle.shutdown_notify().notified() => break 'bridge_wait,
         };
-        let Some(event) = event else { break };
+        let Some(event) = event else { break 'bridge_wait };
 
         match event {
             BridgeEvent::Ready { host, port } => {
@@ -125,13 +125,11 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
                     }
                     Err(e) => eprintln!("[AA wired] failed to dial loopback: {e}"),
                 }
-                break;
             }
             BridgeEvent::Error(e) => {
                 eprintln!("[AA wired] USB bridge error: {e}");
-                break;
             }
-            BridgeEvent::Closed => break,
+            BridgeEvent::Closed => {}
         }
     }
 

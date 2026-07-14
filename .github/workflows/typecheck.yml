@@ -1,0 +1,96 @@
+name: typecheck
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  checks:
+    name: Lint, Typecheck (Vue/TS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HUSKY: 0
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup latest Node.js 24.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: true
+
+      - name: Setup bun
+        run: |
+          curl -fsSL https://bun.com/install | bash
+          echo "bun version: $(bun -v)"
+          node -e "const v=require('child_process').execSync('bun -v').toString().trim(); if(!/^1\\./.test(v)){console.error('Expected bun 1.x, got', v); process.exit(1);} console.log('bun 1 OK');"
+
+      - name: Resolve bun store path
+        id: bun_store
+        run: echo "path=~/.bun/install/cache" >> "$GITHUB_OUTPUT"
+
+      - name: Cache bun store
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.bun_store.outputs.path }}
+          key: bun-store-${{ runner.os }}-x64-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-store-${{ runner.os }}-x64-
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run Biome checks (TS)
+        run: bun run lint:check
+
+      - name: Run ESLint (Vue)
+        run: bun run lint:vue
+
+      - name: Run TypeScript type-check
+        run: bun run typecheck
+
+  rust-lint:
+    name: Clippy (Rust)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            pkg-config \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            protobuf-compiler \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            librtlsdr-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings

@@ -110,66 +110,149 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="radio-page fill-height d-flex flex-column align-center">
-        <div class="flex-grow-1"></div>
+  <div class="radio-page fill-height d-flex flex-column align-center">
+    <div class="flex-grow-1" />
 
-        <v-tabs v-model="tab" class="radio-tabs mb-6" density="compact" color="cyan-accent-3" slider-color="cyan-accent-3" align-tabs="center">
-            <v-tab value="dab">DAB</v-tab>
-            <v-tab value="fm">FM</v-tab>
-        </v-tabs>
+    <v-tabs
+      v-model="tab"
+      class="radio-tabs mb-6"
+      density="compact"
+      color="cyan-accent-3"
+      slider-color="cyan-accent-3"
+      align-tabs="center"
+    >
+      <v-tab value="dab">
+        DAB
+      </v-tab>
+      <v-tab value="fm">
+        FM
+      </v-tab>
+    </v-tabs>
 
-        <v-tabs-window v-model="tab" class="w-100" crossfade>
-            <v-tabs-window-item value="fm" class="header-panel d-flex flex-column align-center w-100">
-                <div class="section-label text-medium-emphasis mb-2">FM RADIO</div>
-
-                <div class="d-flex align-end">
-                    <span class="freq-display">{{ frequencyDisplay }}</span>
-                    <span class="freq-unit text-medium-emphasis ml-2 mb-2">MHz</span>
-                </div>
-                <div class="text-medium-emphasis mb-2">{{ station?.name || station?.text || 'No station' }}</div>
-                <div class="text-medium-emphasis">{{ statusText }}</div>
-            </v-tabs-window-item>
-            <v-tabs-window-item value="dab" class="header-panel d-flex flex-column align-center w-100">
-                <v-icon icon="mdi-radio" size="48" class="text-medium-emphasis mb-4"></v-icon>
-                <div class="section-label text-medium-emphasis mb-2">DAB RADIO</div>
-                <div class="text-medium-emphasis">Coming soon</div>
-            </v-tabs-window-item>
-        </v-tabs-window>
-
-        <div class="flex-grow-1"></div>
-
-        <div class="d-flex align-center ga-4 mb-8" :class="{ 'controls-hidden': tab !== 'fm' }">
-            <v-btn icon="mdi-rewind" size="64" variant="flat" color="grey-darken-3" :disabled="busy" @click="step(-1, true)"></v-btn>
-            <v-btn icon="mdi-chevron-left" size="64" variant="flat" color="grey-darken-3" :disabled="busy" @click="step(-1, false)"></v-btn>
-            <v-btn :icon="running ? 'mdi-stop' : 'mdi-play'" size="76" variant="flat" color="white" :disabled="busy" @click="toggleStartStop"></v-btn>
-            <v-btn icon="mdi-chevron-right" size="64" variant="flat" color="grey-darken-3" :disabled="busy" @click="step(1, false)"></v-btn>
-            <v-btn icon="mdi-fast-forward" size="64" variant="flat" color="grey-darken-3" :disabled="busy" @click="step(1, true)"></v-btn>
+    <v-tabs-window
+      v-model="tab"
+      class="w-100"
+      crossfade
+    >
+      <v-tabs-window-item
+        value="fm"
+        class="header-panel d-flex flex-column align-center w-100"
+      >
+        <div class="section-label text-medium-emphasis mb-2">
+          FM RADIO
         </div>
 
-        <div class="d-flex align-center ga-3" :class="{ 'controls-hidden': tab !== 'fm' }">
-            <v-btn
-                v-for="(preset, i) in presets"
-                :key="i"
-                icon
-                size="64"
-                variant="flat"
-                color="grey-darken-3"
-                class="preset-btn"
-                :class="{ 'preset-btn--active': preset.active }"
-                :disabled="busy"
-                @pointerdown="onPresetPointerDown(i)"
-                @pointerup="onPresetPointerUp(i)"
-                @pointerleave="onPresetPointerCancel"
-                @pointercancel="onPresetPointerCancel"
-                @contextmenu.prevent
-            >
-                <span class="preset-label">{{ preset.label }}</span>
-            </v-btn>
+        <div class="d-flex align-end">
+          <span class="freq-display">{{ frequencyDisplay }}</span>
+          <span class="freq-unit text-medium-emphasis ml-2 mb-2">MHz</span>
         </div>
-        <div class="text-medium-emphasis text-body-small mt-3 mb-10" :class="{ 'controls-hidden': tab !== 'fm' }">
-            <v-icon icon="mdi-star" size="x-small" class="mr-1"></v-icon>tap to play, hold to save
+        <div class="text-medium-emphasis mb-2">
+          {{ station?.name || station?.text || 'No station' }}
         </div>
+        <div class="text-medium-emphasis">
+          {{ statusText }}
+        </div>
+      </v-tabs-window-item>
+      <v-tabs-window-item
+        value="dab"
+        class="header-panel d-flex flex-column align-center w-100"
+      >
+        <v-icon
+          icon="mdi-radio"
+          size="48"
+          class="text-medium-emphasis mb-4"
+        />
+        <div class="section-label text-medium-emphasis mb-2">
+          DAB RADIO
+        </div>
+        <div class="text-medium-emphasis">
+          Coming soon
+        </div>
+      </v-tabs-window-item>
+    </v-tabs-window>
+
+    <div class="flex-grow-1" />
+
+    <div
+      class="d-flex align-center ga-4 mb-8"
+      :class="{ 'controls-hidden': tab !== 'fm' }"
+    >
+      <v-btn
+        icon="mdi-rewind"
+        size="64"
+        variant="flat"
+        color="grey-darken-3"
+        :disabled="busy"
+        @click="step(-1, true)"
+      />
+      <v-btn
+        icon="mdi-chevron-left"
+        size="64"
+        variant="flat"
+        color="grey-darken-3"
+        :disabled="busy"
+        @click="step(-1, false)"
+      />
+      <v-btn
+        :icon="running ? 'mdi-stop' : 'mdi-play'"
+        size="76"
+        variant="flat"
+        color="white"
+        :disabled="busy"
+        @click="toggleStartStop"
+      />
+      <v-btn
+        icon="mdi-chevron-right"
+        size="64"
+        variant="flat"
+        color="grey-darken-3"
+        :disabled="busy"
+        @click="step(1, false)"
+      />
+      <v-btn
+        icon="mdi-fast-forward"
+        size="64"
+        variant="flat"
+        color="grey-darken-3"
+        :disabled="busy"
+        @click="step(1, true)"
+      />
     </div>
+
+    <div
+      class="d-flex align-center ga-3"
+      :class="{ 'controls-hidden': tab !== 'fm' }"
+    >
+      <v-btn
+        v-for="(preset, i) in presets"
+        :key="i"
+        icon
+        size="64"
+        variant="flat"
+        color="grey-darken-3"
+        class="preset-btn"
+        :class="{ 'preset-btn--active': preset.active }"
+        :disabled="busy"
+        @pointerdown="onPresetPointerDown(i)"
+        @pointerup="onPresetPointerUp(i)"
+        @pointerleave="onPresetPointerCancel"
+        @pointercancel="onPresetPointerCancel"
+        @contextmenu.prevent
+      >
+        <span class="preset-label">{{ preset.label }}</span>
+      </v-btn>
+    </div>
+    <div
+      class="text-medium-emphasis text-body-small mt-3 mb-10"
+      :class="{ 'controls-hidden': tab !== 'fm' }"
+    >
+      <v-icon
+        icon="mdi-star"
+        size="x-small"
+        class="mr-1"
+      />tap to play, hold to save
+    </div>
+  </div>
 </template>
 
 <style scoped>

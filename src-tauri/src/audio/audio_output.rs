@@ -37,7 +37,7 @@ impl AudioOutput {
         let channels = max(1, opts.channels);
         AudioOutput {
             stop_grace_ms: 500,
-            channels: channels,
+            channels,
             mode: opts
                 .mode
                 .unwrap_or(Self::infer_mode(opts.sample_rate, channels)),
@@ -52,6 +52,7 @@ impl AudioOutput {
         }
     }
 
+    #[allow(dead_code)]
     fn set_device(&mut self, device: Option<String>) {
         self.device = device;
     }
@@ -164,6 +165,7 @@ impl AudioOutput {
         self.cleanup();
     }
 
+    #[allow(dead_code)]
     async fn dispose(&mut self) {
         self.kill_immediate().await;
     }
@@ -309,12 +311,10 @@ impl AudioOutput {
     }
 
     fn infer_mode(sample_rate: i32, channels: i32) -> AudioOutputMode {
-        if channels == 1 {
-            return AudioOutputMode::Realtime;
-        } else if sample_rate <= 24000 {
-            return AudioOutputMode::Realtime;
+        if channels == 1 || sample_rate <= 24000 {
+            AudioOutputMode::Realtime
         } else {
-            return AudioOutputMode::Music;
+            AudioOutputMode::Music
         }
     }
 }

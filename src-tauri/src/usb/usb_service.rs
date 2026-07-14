@@ -3,7 +3,6 @@ use std::thread;
 use tokio::sync::Mutex;
 
 use futures_lite::stream;
-use nusb::MaybeFuture;
 use regex::Regex;
 use std::sync::LazyLock;
 use tauri::{AppHandle, Emitter};
@@ -26,9 +25,12 @@ const NON_PHONE_INTERFACE_CLASSES: [u8; 10] = [
 
 const PHONE_REENUM_SUPRESS_MS: u32 = 2_500;
 
+#[allow(dead_code)]
 static DISCONNECT_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)not[\s_-]?found|no[\s_-]?device|disconnect").unwrap());
 
+// Dongle (wireless AA dongle) support, not yet wired up.
+#[allow(dead_code)]
 struct DongleUsbBasics {
     vendor_id: u16,
     product_id: u16,
@@ -73,12 +75,9 @@ impl UsbService {
         thread::spawn(move || loop {
             let mut svc = service.blocking_lock();
 
-            match svc.kill_rx.as_ref().unwrap().try_recv() {
-                Ok(_) => {
-                    println!("[UsbService] Received kill signal, stopping USB service.");
-                    break;
-                }
-                Err(_) => {}
+            if svc.kill_rx.as_ref().unwrap().try_recv().is_ok() {
+                println!("[UsbService] Received kill signal, stopping USB service.");
+                break;
             }
 
             let watcher = match nusb::watch_devices() {
@@ -157,7 +156,7 @@ impl UsbService {
         }
     }
 
-    pub async fn init(self: &mut Self) {
+    pub async fn init(&mut self) {
         let devices: Vec<_> = match nusb::list_devices().await {
             Ok(devices) => devices.collect(),
             Err(e) => {
@@ -217,7 +216,7 @@ impl UsbService {
         now < self.phone_suspend_until
     }
 
-    fn mark_phone_attached(self: &mut Self, device: nusb::DeviceInfo) {
+    fn mark_phone_attached(&mut self, device: nusb::DeviceInfo) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -233,7 +232,7 @@ impl UsbService {
         });
     }
 
-    fn mark_phone_detached(self: &mut Self, _device: &nusb::DeviceInfo) {
+    fn mark_phone_detached(&mut self, _device: &nusb::DeviceInfo) {
         self.last_phone_state = false;
         self.connected_phone_device = None;
         // Deliberately NOT resetting phone_suspend_until here: AOAP re-enumeration disconnects
@@ -287,33 +286,35 @@ impl UsbService {
         false
     }
 
-    fn notify_device_change(self: &Self, device: &nusb::DeviceInfo, connected: bool) {
+    #[allow(dead_code)]
+    fn notify_device_change(&self, device: &nusb::DeviceInfo, connected: bool) {
         let payload = serde_json::json!({
             "connected": connected,
             "device": {
                 "vendorId": device.vendor_id(),
                 "productId": device.product_id(),
-                "deviceName": device.product_string().unwrap_or_else(|| "unknown")
+                "deviceName": device.product_string().unwrap_or("unknown")
             }
         });
 
         let _ = self.app.emit("usb-event", payload);
     }
 
-    fn broadcast_generic_usb_event(self: &Self, event_type: &str, device: nusb::DeviceInfo) {
+    fn broadcast_generic_usb_event(&self, event_type: &str, device: nusb::DeviceInfo) {
         let payload = serde_json::json!({
             "type": event_type,
             "device": {
                 "vendorId": device.vendor_id(),
                 "productId": device.product_id(),
-                "deviceName": device.product_string().unwrap_or_else(|| "unknown")
+                "deviceName": device.product_string().unwrap_or("unknown")
             }
         });
 
         let _ = self.app.emit("usb-event", payload);
     }
 
-    fn broadcast_generic_usb_event_no_device(self: &Self, event_type: String) {
+    #[allow(dead_code)]
+    fn broadcast_generic_usb_event_no_device(&self, event_type: String) {
         let payload = serde_json::json!({
             "type": event_type,
             "device": "{ vendorId: null, productId: null, deviceName: null }"
@@ -322,7 +323,8 @@ impl UsbService {
         let _ = self.app.emit("usb-event", payload);
     }
 
-    fn notify_device_change_no_device(self: &Self, connected: bool) {
+    #[allow(dead_code)]
+    fn notify_device_change_no_device(&self, connected: bool) {
         let payload = serde_json::json!({
             "connected": connected,
             "device": "{ vendorId: null, productId: null, deviceName: null }"
@@ -331,7 +333,8 @@ impl UsbService {
         let _ = self.app.emit("usb-event", payload);
     }
 
-    fn get_dongle_usb_basics(self: &Self, device: &nusb::DeviceInfo) -> DongleUsbBasics {
+    #[allow(dead_code)]
+    fn get_dongle_usb_basics(&self, device: &nusb::DeviceInfo) -> DongleUsbBasics {
         let device_version = device.device_version(); // u16, BCD e.g. 0x0203
 
         let major = (device_version >> 8) as u8;
@@ -364,7 +367,8 @@ impl UsbService {
         )
     }
 
-    fn notify_reset(notify_type: String, ok: bool) {
+    #[allow(dead_code)]
+    fn notify_reset(_notify_type: String, _ok: bool) {
         // TODO
     }
 
@@ -372,6 +376,7 @@ impl UsbService {
 
     pub async fn graceful_reset() {}
 
+    #[allow(dead_code)]
     async fn reset_dongle(&mut self, dongle: nusb::DeviceInfo) -> bool {
         let device = match dongle.open().await {
             Ok(d) => d,

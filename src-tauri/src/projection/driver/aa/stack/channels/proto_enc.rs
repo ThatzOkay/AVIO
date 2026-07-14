@@ -26,7 +26,7 @@ pub fn encode_varint(value: i64) -> Vec<u8> {
 
 /// Emit `<tag, varint>` for a varint-typed field.
 pub fn field_varint(field_number: u32, value: i64) -> Vec<u8> {
-    let mut out = encode_varint(((field_number << 3) | 0) as i64);
+    let mut out = encode_varint((field_number << 3) as i64);
     out.extend(encode_varint(value));
     out
 }

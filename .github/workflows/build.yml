@@ -1,0 +1,446 @@
+name: build
+run-name: 'build → ${{ github.event.workflow_run.head_branch || github.ref_name }}'
+
+on:
+  workflow_run:
+    workflows: ['typecheck']
+    branches: [main]
+    types: [completed]
+
+  # Manual runs build the branch the workflow is dispatched on
+  workflow_dispatch:
+    inputs:
+      linux_x64:
+        description: 'Build Linux x64'
+        type: boolean
+        default: true
+      linux_arm64:
+        description: 'Build Linux arm64'
+        type: boolean
+        default: true
+      macos_arm64:
+        description: 'Build macOS arm64 (dmg)'
+        type: boolean
+        default: true
+      macos_x64:
+        description: 'Build macOS x64 (dmg)'
+        type: boolean
+        default: true
+      windows_x64:
+        description: 'Build Windows x64 (nsis/msi)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  plan:
+    name: Plan build matrix
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      is_empty: ${{ steps.plan.outputs.is_empty }}
+    steps:
+      - id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          IN_LINUX_X64: ${{ inputs.linux_x64 }}
+          IN_LINUX_ARM64: ${{ inputs.linux_arm64 }}
+          IN_MACOS_ARM64: ${{ inputs.macos_arm64 }}
+          IN_MACOS_X64: ${{ inputs.macos_x64 }}
+          IN_WINDOWS_X64: ${{ inputs.windows_x64 }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const eventName = process.env.EVENT_NAME;
+
+          const isTrue = (v) => String(v).toLowerCase() === 'true';
+
+          const inputs = {
+            linux_x64: isTrue(process.env.IN_LINUX_X64),
+            linux_arm64: isTrue(process.env.IN_LINUX_ARM64),
+            macos_arm64: isTrue(process.env.IN_MACOS_ARM64),
+            macos_x64: isTrue(process.env.IN_MACOS_X64),
+            windows_x64: isTrue(process.env.IN_WINDOWS_X64),
+          };
+
+          const include = [];
+          // macOS lanes are both native (no cross-compilation): arm64 on the default
+          // (Apple Silicon) runner, x64 on GitHub's dedicated Intel image. That keeps
+          // the `gst-host` sidecar's target-triple naming (derived from `rustc -vV`'s
+          // `host:` line) correct without needing `--target` plumbing anywhere.
+          const add = (os, runner, arch) => {
+            include.push({ os, runner, arch });
+          };
+
+          if (eventName === 'workflow_run') {
+            // main: always build everything
+            add('linux', 'ubuntu-latest', 'x64');
+            add('linux', 'ubuntu-24.04-arm', 'arm64');
+            add('macos', 'macos-latest', 'arm64');
+            add('macos', 'macos-15-intel', 'x64');
+            add('windows', 'windows-2025-vs2026', 'x64');
+          } else {
+            // manual: only selected
+            if (inputs.linux_x64) add('linux', 'ubuntu-latest', 'x64');
+            if (inputs.linux_arm64) add('linux', 'ubuntu-24.04-arm', 'arm64');
+            if (inputs.macos_arm64) add('macos', 'macos-latest', 'arm64');
+            if (inputs.macos_x64) add('macos', 'macos-15-intel', 'x64');
+            if (inputs.windows_x64) add('windows', 'windows-2025-vs2026', 'x64');
+          }
+
+          const matrixObj = { include };
+          const matrix = JSON.stringify(matrixObj);
+
+          const isEmpty = include.length === 0 ? 'true' : 'false';
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${matrix}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `is_empty=${isEmpty}\n`);
+
+          console.log('Planned matrix:', matrix);
+          console.log('Empty:', isEmpty);
+          NODE
+
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }}) on ${{ github.event.workflow_run.head_branch || github.ref_name }}
+    needs: plan
+    if: ${{ needs.plan.outputs.is_empty != 'true' }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      BUILD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Dispatch builds the ref the workflow was started on, workflow_run pins the head sha
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+
+      - name: Setup bun
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://bun.com/install | bash
+          BUN_BIN="$HOME/.bun/bin"
+          echo "$BUN_BIN" >> "$GITHUB_PATH"
+          "$BUN_BIN/bun" -v
+
+      - name: Cache bun store
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-store-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-store-${{ matrix.os }}-${{ matrix.arch }}-
+
+      # ----------------------------
+      # Linux (x64 + arm64, both native runners)
+      # ----------------------------
+      - name: Install Linux deps
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              build-essential curl wget file pkg-config ca-certificates \
+              libssl-dev \
+              libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
+              protobuf-compiler \
+              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+              librtlsdr-dev libudev-dev \
+              ninja-build bison patchelf \
+              libegl-dev libgles-dev libgbm-dev libcairo2-dev \
+              libxkbcommon-dev libpixman-1-dev \
+              libffi-dev libexpat1-dev \
+              python3 python3-dev python3-pip
+          sudo rm -rf /var/lib/apt/lists/*
+          # avio-compositor's meson.build force-builds the vendored wlroots/wayland
+          # wraps, which need meson >=1.4; Ubuntu's apt meson is usually older.
+          sudo pip3 install --break-system-packages --upgrade 'meson>=1.4'
+
+      - name: Install deps (bun) [linux]
+        if: matrix.os == 'linux'
+        run: bun install --frozen-lockfile
+
+      - name: Build (tauri) [linux]
+        if: matrix.os == 'linux'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
+
+      # ----------------------------
+      # macOS (arm64 native + x64 native on macos-15-intel)
+      # ----------------------------
+      - name: Install deps (brew) [macos]
+        if: matrix.os == 'macos'
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        run: |
+          set -euo pipefail
+          for pkg in pkg-config protobuf librtlsdr; do
+            brew list --versions "$pkg" >/dev/null || brew install "$pkg" >/dev/null
+          done
+
+      # Runtime + devel framework so cargo/pkg-config can build the gst-video sidecar
+      # (devel = headers + pkg-config, runtime = the dylibs to link against). The
+      # official macOS package is already a universal (arm64+x64) binary, so this
+      # step is identical for both the arm64 and x64 (Intel) lanes.
+      - name: Resolve GStreamer version [macos]
+        id: gstver_mac
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          GST_VERSION=$(curl -fsSL https://gstreamer.freedesktop.org/data/pkg/osx/ \
+            | grep -oE 'href="[0-9]+\.[0-9]+\.[0-9]+/"' \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+            | awk -F. '$2 % 2 == 0' \
+            | sort -V \
+            | tail -1)
+          [ -n "$GST_VERSION" ] || { echo "Failed to resolve GStreamer version"; exit 1; }
+          echo "version=$GST_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved macOS GStreamer: $GST_VERSION"
+
+      - name: Cache GStreamer pkgs [macos]
+        id: gstcache_mac
+        if: matrix.os == 'macos'
+        uses: actions/cache@v5
+        with:
+          path: |
+            gst-runtime.pkg
+            gst-devel.pkg
+          key: gst-pkg-macos-universal-${{ steps.gstver_mac.outputs.version }}
+
+      - name: Download GStreamer pkgs [macos]
+        if: matrix.os == 'macos' && steps.gstcache_mac.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://gstreamer.freedesktop.org/data/pkg/osx/${{ steps.gstver_mac.outputs.version }}"
+          curl -fL -o gst-runtime.pkg "${base}/gstreamer-1.0-${{ steps.gstver_mac.outputs.version }}-universal.pkg"
+          curl -fL -o gst-devel.pkg "${base}/gstreamer-1.0-devel-${{ steps.gstver_mac.outputs.version }}-universal.pkg"
+
+      - name: Install GStreamer (runtime + devel) [macos]
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo installer -pkg gst-runtime.pkg -target /
+          sudo installer -pkg gst-devel.pkg -target /
+
+      - name: Install deps (bun) [macos]
+        if: matrix.os == 'macos'
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build (tauri) [macos]
+        if: matrix.os == 'macos'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
+
+      # ----------------------------
+      # Windows x64
+      # ----------------------------
+      - name: Resolve GStreamer version [windows]
+        id: gstver_win
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # GStreamer uses GNOME-style versioning: even minor = stable, odd = dev.
+          $listing = (Invoke-WebRequest -Uri 'https://gstreamer.freedesktop.org/data/pkg/windows/' -UseBasicParsing).Content
+          $versions = [regex]::Matches($listing, 'href="([0-9]+\.[0-9]+\.[0-9]+)/"') |
+            ForEach-Object { [Version]$_.Groups[1].Value } |
+            Where-Object { $_.Minor % 2 -eq 0 } |
+            Sort-Object
+          if (-not $versions -or $versions.Count -eq 0) {
+            throw 'Failed to resolve latest stable GStreamer version from windows listing'
+          }
+          $gstVersion = $versions[-1].ToString()
+          Write-Host "Resolved Windows GStreamer: $gstVersion"
+          "version=$gstVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Cache GStreamer installer [windows]
+        id: gstcache_win
+        if: matrix.os == 'windows'
+        uses: actions/cache@v5
+        with:
+          path: gstreamer-msvc-x86_64.exe
+          key: gst-exe-windows-msvc-x86_64-${{ steps.gstver_win.outputs.version }}
+
+      - name: Download GStreamer installer [windows]
+        if: matrix.os == 'windows' && steps.gstcache_win.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '${{ steps.gstver_win.outputs.version }}'
+          $url = "https://gstreamer.freedesktop.org/data/pkg/windows/$v/msvc/gstreamer-1.0-msvc-x86_64-$v.exe"
+          curl.exe -L $url -o 'gstreamer-msvc-x86_64.exe'
+
+      - name: Install GStreamer (runtime + devel) [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Start-Process `
+            -FilePath '.\gstreamer-msvc-x86_64.exe' `
+            -ArgumentList @('/SP-', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TYPE=devel') `
+            -PassThru
+          if (-not $p.WaitForExit(180000)) {
+            try { $p.Kill() } catch {}
+            throw 'GStreamer installer timed out after 3 minutes'
+          }
+          if ($p.ExitCode -ne 0) {
+            throw "GStreamer installer failed with exit code $($p.ExitCode)"
+          }
+
+          $root = "$env:ProgramFiles\gstreamer\1.0\msvc_x86_64"
+          if (-not (Test-Path "$root\lib\gstreamer-1.0.lib")) {
+            throw "GStreamer dev libs not found at $root"
+          }
+          # Export the 8.3 short path so the space in "Program Files" cannot break
+          # the include/lib paths cargo/cxx-build feed to MSBuild
+          $shortRoot = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($root).ShortPath
+          Write-Host "GStreamer MSVC root (8.3): $shortRoot"
+          "GSTREAMER_1_0_ROOT_MSVC_X86_64=$shortRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$root\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Install protoc [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: choco install protoc -y --no-progress
+
+      # librtlsdr for Windows (DLL + generated MSVC import lib) is vendored under
+      # src-tauri/crates/tauri-plugin-rtl-sdr/vendor/windows-x64/ - see the README
+      # there. build.rs adds it to the linker search path and
+      # tauri.windows.conf.json bundles the DLL next to the exe, so nothing needs
+      # to be fetched or generated here.
+
+      - name: Install deps (bun) [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: bun install --frozen-lockfile
+
+      - name: Build (tauri) [windows]
+        if: matrix.os == 'windows'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
+
+      # ----------------------------
+      # Badges (single representative leg, same as before)
+      # ----------------------------
+      - name: Read version from package.json
+        id: pkg
+        if: matrix.os == 'linux' && matrix.arch == 'x64' && (env.BUILD_BRANCH == 'main' || env.BUILD_BRANCH == 'dev')
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Read GStreamer asset version
+        id: gst
+        if: matrix.os == 'linux' && matrix.arch == 'x64' && (env.BUILD_BRANCH == 'main' || env.BUILD_BRANCH == 'dev')
+        shell: bash
+        run: |
+          for f in assets/gstreamer/linux-x64/version.txt \
+                   assets/gstreamer/macos-arm64/version.txt \
+                   assets/gstreamer/linux-arm64/version.txt \
+                   assets/gstreamer/windows-x64/version.txt; do
+            if [[ -f "$f" ]]; then
+              v="$(cat "$f")"
+              echo "version=$v" >> "$GITHUB_OUTPUT"
+              echo "Found GStreamer version $v in $f"
+              exit 0
+            fi
+          done
+          echo "version=" >> "$GITHUB_OUTPUT"
+          echo "No GStreamer version.txt found"
+
+      - name: Read Tauri / bun / WebKitGTK versions
+        id: runtime
+        if: matrix.os == 'linux' && matrix.arch == 'x64' && (env.BUILD_BRANCH == 'main' || env.BUILD_BRANCH == 'dev')
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "bun=$(bun -v)" >> "$GITHUB_OUTPUT"
+          echo "tauri=$(node -p "require('./node_modules/@tauri-apps/cli/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "webkitgtk=$(pkg-config --modversion webkit2gtk-4.1)" >> "$GITHUB_OUTPUT"
+
+      - name: Push badges to version branch
+        if: matrix.os == 'linux' && matrix.arch == 'x64' && (env.BUILD_BRANCH == 'main' || env.BUILD_BRANCH == 'dev')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH_NAME: ${{ env.BUILD_BRANCH }}
+          APP_VERSION: ${{ steps.pkg.outputs.version }}
+          GSTREAMER_VERSION: ${{ steps.gst.outputs.version }}
+          BUN_VERSION: ${{ steps.runtime.outputs.bun }}
+          TAURI_VERSION: ${{ steps.runtime.outputs.tauri }}
+          WEBKITGTK_VERSION: ${{ steps.runtime.outputs.webkitgtk }}
+        run: |
+          set -euo pipefail
+
+          BADGE_DIR="$(mktemp -d)"
+          cd "$BADGE_DIR"
+
+          git clone --depth=1 --branch version "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}" .
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p .github/badges
+          write_badge() {
+            local name="$1" value="$2"
+            [ -n "$value" ] || return 0
+            echo "{\"schemaVersion\":1,\"label\":\"${name}\",\"message\":\"${value}\",\"color\":\"blue\"}" \
+              > ".github/badges/${BRANCH_NAME}-${name}.json"
+          }
+
+          write_badge version "$APP_VERSION"
+          write_badge gstreamer "$GSTREAMER_VERSION"
+          write_badge bun "$BUN_VERSION"
+          write_badge tauri "$TAURI_VERSION"
+          write_badge webkitgtk "$WEBKITGTK_VERSION"
+
+          git add .github/badges
+
+          if git diff --cached --quiet; then
+            echo "No badge changes"
+            exit 0
+          fi
+
+          git commit -m "chore(badges): ${BRANCH_NAME} -> v${APP_VERSION}"
+          git push

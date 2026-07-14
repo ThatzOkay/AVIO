@@ -1,5 +1,4 @@
 use std::ffi::{c_char, c_int, c_void};
-use std::fmt::Error;
 use std::sync::Mutex;
 use std::thread;
 
@@ -15,7 +14,10 @@ type AudioCallback = Box<dyn Fn(Vec<f32>) + Send + Sync>;
 pub type RtlSdrDev = *mut c_void;
 pub type ReadAsyncCb = extern "C" fn(buf: *mut u8, len: u32, ctx: *mut c_void);
 
+// Superseded by the caller-side SAMPLE_RATE in fm_radio_service.rs; kept for reference.
+#[allow(dead_code)]
 const SAMPLE_RATE: u32 = 2048000;
+#[allow(dead_code)]
 const OUTPUT_RATE: u32 = 48000;
 
 #[link(name = "rtlsdr")]
@@ -62,6 +64,7 @@ static RDS_STATE: Mutex<RdsInfo> = Mutex::new(RdsInfo {
 });
 
 enum StreamCommand {
+    #[allow(dead_code)]
     Tune(u32),
     Stop,
 }
@@ -204,7 +207,9 @@ struct FmDemod {
     resampler: AdaptiveResampler,
     deemph: DeemphasisFilter,
     volume: f32,
+    #[allow(dead_code)]
     mpx_rate: f32,
+    #[allow(dead_code)]
     decim_factor: usize,
     mpx_decimator: Decimator,
     stereo: StereoDecoderPLL,
@@ -243,6 +248,7 @@ impl FmDemod {
         })
     }
 
+    #[allow(dead_code)]
     fn reset_rds(&mut self) {
         self.mpx_decimator = Decimator::new(self.decim_factor);
         self.stereo = StereoDecoderPLL::new(self.mpx_rate);

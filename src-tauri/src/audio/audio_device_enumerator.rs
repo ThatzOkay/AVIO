@@ -93,6 +93,7 @@ pub fn parse_device_monitor_output(output: &str, kind: AudioDeviceType) -> Vec<A
     let mut devices = vec![];
     let re = Regex::new(r"(?m)^\s*Device found:\s*$").unwrap();
     let blocks: Vec<&str> = re.split_inclusive(output).collect();
+    let default_re = Regex::new(r"(?im)^\s*default:\s*true\s*$").unwrap();
 
     for block in blocks {
         if block.trim().is_empty() {
@@ -141,9 +142,7 @@ pub fn parse_device_monitor_output(output: &str, kind: AudioDeviceType) -> Vec<A
             continue;
         }
 
-        let is_default = Regex::new(r"(?im)^\s*default:\s*true\s*$")
-            .unwrap()
-            .is_match(block)
+        let is_default = default_re.is_match(block)
             || match_prop(block, "is-default") == Some("true".to_owned())
             || match_prop(block, "is-default") == Some("true (gboolean)".to_owned())
             || match_prop(block, "node.is-default") == Some("true".to_owned());
@@ -151,7 +150,7 @@ pub fn parse_device_monitor_output(output: &str, kind: AudioDeviceType) -> Vec<A
         let id = id.unwrap();
 
         let device = AudioDevice {
-            id: id,
+            id,
             name: name.unwrap(),
             is_default,
             offline: None,

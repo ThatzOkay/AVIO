@@ -213,6 +213,7 @@ impl GstHost {
     }
 
     // op 4: calibration LUT as 5 little-endian float64 (gamma, contrast, gain R/G/B).
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_gamma(
         handle: &GstHostHandle,
         app: &tauri::AppHandle,

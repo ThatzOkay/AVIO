@@ -1,12 +1,11 @@
 use std::{
     collections::HashSet,
-    fmt::format,
     path::PathBuf,
-    sync::{Mutex, OnceLock},
+    sync::Mutex,
 };
 
 use regex::Regex;
-use tauri::{path::BaseDirectory, utils::config, AppHandle, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
@@ -120,8 +119,8 @@ async fn install_rule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error +
     let content = build_rule_content(app)?;
     let script = [
         format!("echo \"{}\" > {}", content.trim(), RULE_FILE),
-        format!("udevadm control --reload-rules"),
-        format!("udevadm trigger"),
+        "udevadm control --reload-rules".to_string(),
+        "udevadm trigger".to_string(),
     ]
     .join(" && ");
 
@@ -133,8 +132,7 @@ async fn install_rule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error +
 
     let code = proc.wait()?.code().unwrap_or(-1);
     if code != 0 {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(Box::new(std::io::Error::other(
             format!("pkexec command failed with exit code {}", code),
         )));
     }

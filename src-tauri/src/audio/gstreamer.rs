@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{path::BaseDirectory, Manager};
 
@@ -48,7 +48,7 @@ pub fn resolve_binary(name: &str, app: &tauri::AppHandle) -> Option<PathBuf> {
 /// we must not override GST_PLUGIN_PATH / GST_PLUGIN_SYSTEM_PATH / LD_LIBRARY_PATH here —
 /// those overrides break the device providers (PipeWire/PulseAudio) that need system libs.
 /// On Windows the binary still needs its bin dir on PATH to find DLLs.
-pub fn gst_env_for_enum(gst_root: &PathBuf) -> Vec<(String, String)> {
+pub fn gst_env_for_enum(gst_root: &Path) -> Vec<(String, String)> {
     let mut env: Vec<(String, String)> = std::env::vars().collect();
 
     let scanner = if std::env::consts::OS == "windows" {
@@ -79,7 +79,7 @@ pub fn gst_env_for_enum(gst_root: &PathBuf) -> Vec<(String, String)> {
     env
 }
 
-pub fn gst_env(gst_root: &PathBuf) -> Vec<(String, String)> {
+pub fn gst_env(gst_root: &Path) -> Vec<(String, String)> {
     let mut env = vec![];
     let plugin_path = gst_root.join("lib").join("gstreamer-1.0");
     let plugin_scanner = if std::env::consts::OS == "windows" {
@@ -179,26 +179,22 @@ pub fn video_parse_element(codec: VideoCodec) -> &'static str {
 
 pub fn video_decoder_element(codec: VideoCodec) -> &'static str {
     if std::env::consts::OS == "macos" {
-        return "vtdec";
+        "vtdec"
     } else if std::env::consts::OS == "windows" {
-        return match codec {
+        match codec {
             VideoCodec::H264 => "d3d11h264dec",
             VideoCodec::H265 => "d3d11h265dec",
-        };
+        }
     } else {
-        return match codec {
+        match codec {
             VideoCodec::H264 => "v4l2slh264dec",
             VideoCodec::H265 => "v4l2slh265dec",
-        };
+        }
     }
 }
 
 pub fn video_sink_element() -> &'static str {
-    if std::env::consts::OS == "macos" {
-        "glimagesink"
-    } else if std::env::consts::OS == "linux" {
-        "glimagesink"
-    } else if std::env::consts::OS == "windows" {
+    if std::env::consts::OS == "windows" {
         "d3d11videosink"
     } else {
         "glimagesink"

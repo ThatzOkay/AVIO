@@ -4,17 +4,44 @@
        v-app background isn't transparent, which would hide the video underneath it). -->
   <RouterView v-if="isTouchWindow" />
   <v-app v-else>
-    <v-navigation-drawer v-if="!androidAutoActive" permanent rail rail-width="64" class="d-flex flex-column">
+    <v-navigation-drawer
+      v-if="!androidAutoActive"
+      permanent
+      rail
+      rail-width="64"
+      class="d-flex flex-column"
+    >
       <div class="d-flex flex-column fill-height">
         <div>
-          <v-list-item :title="time" class="px-0 text-center justify-center"></v-list-item>
-          <v-divider></v-divider>
+          <v-list-item
+            :title="time"
+            class="px-0 text-center justify-center"
+          />
+          <v-divider />
         </div>
         <div class="d-flex flex-column justify-space-between flex-grow-1 mt-2 mb-2">
-          <v-list-item @click="() => router.push('/')" link prepend-icon="mdi-phone" class="flex-1-1-0" :class="{ 'v-list-item--active': route.path === '/' }"></v-list-item>
-          <v-list-item v-if="statusStore.rtlSdrDetected" @click="() => router.push('/radio')" link prepend-icon="mdi-radio" class="flex-1-1-0" :class="{ 'v-list-item--active': route.path === '/radio' }"></v-list-item>
-          <v-list-item @click="() => router.push('/settings')" link prepend-icon="mdi-cog"
-            class="flex-1-1-0" :class="{ 'v-list-item--active': route.path === '/settings' }"></v-list-item>
+          <v-list-item
+            link
+            prepend-icon="mdi-phone"
+            class="flex-1-1-0"
+            :class="{ 'v-list-item--active': route.path === '/' }"
+            @click="() => router.push('/')"
+          />
+          <v-list-item
+            v-if="statusStore.rtlSdrDetected"
+            link
+            prepend-icon="mdi-radio"
+            class="flex-1-1-0"
+            :class="{ 'v-list-item--active': route.path === '/radio' }"
+            @click="() => router.push('/radio')"
+          />
+          <v-list-item
+            link
+            prepend-icon="mdi-cog"
+            class="flex-1-1-0"
+            :class="{ 'v-list-item--active': route.path === '/settings' }"
+            @click="() => router.push('/settings')"
+          />
         </div>
       </div>
     </v-navigation-drawer>

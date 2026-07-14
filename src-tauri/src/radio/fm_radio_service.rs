@@ -33,7 +33,9 @@ pub struct StationInfo {
 }
 
 pub struct RadioEvent {
+    #[allow(dead_code)]
     event_type: String,
+    #[allow(dead_code)]
     message: Option<String>,
 }
 
@@ -125,8 +127,8 @@ impl FMRadioService {
 
         if !self.device_open {
             let open_result = fm_open(0).map_err(|e| e.to_string());
-            if !open_result.is_ok() {
-                eprintln!("Failed to open device: {}", open_result.unwrap_err());
+            if let Err(e) = open_result {
+                eprintln!("Failed to open device: {e}");
                 return;
             }
             self.device_open = true;
@@ -254,7 +256,7 @@ impl FMRadioService {
             .await;
     }
 
-    pub fn clamp_frequency(self: &Self, khz: u32) -> u32 {
+    pub fn clamp_frequency(&self, khz: u32) -> u32 {
         khz.clamp(FM_BAND_MIN_KHZ, FM_BAND_MAX_KHZ)
     }
 }

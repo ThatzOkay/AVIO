@@ -9,23 +9,30 @@ pub mod audio_device_enumerator;
 pub mod audio_downsample;
 pub mod audio_output;
 pub mod gstreamer;
+// Capture-side mic support, not yet wired to the AA MicChannel path.
+#[allow(dead_code)]
 pub mod microphone;
 
 struct DedupedPerMac {
     deduped: Vec<AudioDevice>,
+    #[allow(dead_code)]
     macs: std::collections::HashSet<String>,
 }
 
+// Bluetooth-audio dedup helpers, not yet wired into device enumeration.
+#[allow(dead_code)]
 const BT_COD_MAJOR_AUDIO: u8 = 0x04;
 static BLUEZ_MAC_RE: OnceLock<Regex> = OnceLock::new();
 
+#[allow(dead_code)]
 fn is_bt_audio_cod(cod: u32) -> bool {
     let major_cod = ((cod >> 8) & 0x1F) as u8;
     major_cod == BT_COD_MAJOR_AUDIO
 }
 
+#[allow(dead_code)]
 fn mac_to_bluez_id(mac: &str) -> Option<String> {
-    return mac.to_uppercase().replace(":", "_").into();
+    mac.to_uppercase().replace(":", "_").into()
 }
 
 fn extract_bluez_mac(device_id: &str) -> Option<String> {

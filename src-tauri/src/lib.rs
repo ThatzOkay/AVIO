@@ -45,7 +45,7 @@ pub fn run() {
             main_window.hide().ok();
 
             if let Some(monitor) = main_window.current_monitor().ok().flatten() {
-                main_window.set_size(monitor.size().clone()).ok();
+                main_window.set_size(*monitor.size()).ok();
                 main_window.center().ok();
             }
 

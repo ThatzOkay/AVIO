@@ -124,10 +124,10 @@ impl TlsEngine {
                         Ok(TlsFeedResult { plaintext: Vec::new(), outbound })
                     }
                     Err(HandshakeError::Failure(mid)) => {
-                        Err(io::Error::new(io::ErrorKind::Other, mid.error().to_string()))
+                        Err(io::Error::other(mid.error().to_string()))
                     }
                     Err(HandshakeError::SetupFailure(e)) => {
-                        Err(io::Error::new(io::ErrorKind::Other, e.to_string()))
+                        Err(io::Error::other(e.to_string()))
                     }
                 }
             }
@@ -138,7 +138,7 @@ impl TlsEngine {
                 self.state = State::Connected(stream);
                 Ok(TlsFeedResult { plaintext, outbound })
             }
-            State::Failed => Err(io::Error::new(io::ErrorKind::Other, "TLS handshake previously failed")),
+            State::Failed => Err(io::Error::other("TLS handshake previously failed")),
         }
     }
 
@@ -149,7 +149,7 @@ impl TlsEngine {
                 stream.write_all(cleartext)?;
                 Ok(std::mem::take(&mut stream.get_mut().outgoing))
             }
-            _ => Err(io::Error::new(io::ErrorKind::Other, "TLS handshake not complete")),
+            _ => Err(io::Error::other("TLS handshake not complete")),
         }
     }
 
@@ -159,7 +159,7 @@ impl TlsEngine {
         match &mut self.state {
             State::Handshaking(mid) => Ok(std::mem::take(&mut mid.get_mut().outgoing)),
             State::Connected(stream) => Ok(std::mem::take(&mut stream.get_mut().outgoing)),
-            State::Failed => Err(io::Error::new(io::ErrorKind::Other, "TLS handshake previously failed")),
+            State::Failed => Err(io::Error::other("TLS handshake previously failed")),
         }
     }
 }

@@ -130,8 +130,8 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
             left: Some(inset_left),
             right: Some(inset_right),
         }),
-        content_insets: Some(main_content_insets.clone()),
-        stable_content_insets: Some(main_content_insets.clone()),
+        content_insets: Some(main_content_insets),
+        stable_content_insets: Some(main_content_insets),
         ui_theme: None,
     };
     let base_video_config = sink_message::VideoConfiguration {
@@ -149,27 +149,27 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
     };
     let mut video_configs = vec![sink_message::VideoConfiguration {
         video_codec_type: Some(media_codec::VIDEO_H264_BP),
-        ..base_video_config.clone()
+        ..base_video_config
     }];
     let mut video_codec_by_index = vec![VideoCodec::H264];
     if cfg.hevc_supported {
         video_configs.push(sink_message::VideoConfiguration {
             video_codec_type: Some(media_codec::VIDEO_H265),
-            ..base_video_config.clone()
+            ..base_video_config
         });
         video_codec_by_index.push(VideoCodec::H265);
     }
     if cfg.vp9_supported {
         video_configs.push(sink_message::VideoConfiguration {
             video_codec_type: Some(media_codec::VIDEO_VP9),
-            ..base_video_config.clone()
+            ..base_video_config
         });
         video_codec_by_index.push(VideoCodec::Vp9);
     }
     if cfg.av1_supported {
         video_configs.push(sink_message::VideoConfiguration {
             video_codec_type: Some(media_codec::VIDEO_AV1),
-            ..base_video_config.clone()
+            ..base_video_config
         });
         video_codec_by_index.push(VideoCodec::Av1);
     }
@@ -238,34 +238,34 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
                     left: Some(cluster_margins.left),
                     right: Some(cluster_margins.right),
                 }),
-                content_insets: Some(cluster_content_insets.clone()),
-                stable_content_insets: Some(cluster_content_insets.clone()),
+                content_insets: Some(cluster_content_insets),
+                stable_content_insets: Some(cluster_content_insets),
                 ui_theme: None,
             }),
         };
         let mut cluster_configs = vec![sink_message::VideoConfiguration {
             video_codec_type: Some(media_codec::VIDEO_H264_BP),
-            ..cluster_base.clone()
+            ..cluster_base
         }];
         cluster_codec_by_index.push(VideoCodec::H264);
         if cfg.hevc_supported {
             cluster_configs.push(sink_message::VideoConfiguration {
                 video_codec_type: Some(media_codec::VIDEO_H265),
-                ..cluster_base.clone()
+                ..cluster_base
             });
             cluster_codec_by_index.push(VideoCodec::H265);
         }
         if cfg.vp9_supported {
             cluster_configs.push(sink_message::VideoConfiguration {
                 video_codec_type: Some(media_codec::VIDEO_VP9),
-                ..cluster_base.clone()
+                ..cluster_base
             });
             cluster_codec_by_index.push(VideoCodec::Vp9);
         }
         if cfg.av1_supported {
             cluster_configs.push(sink_message::VideoConfiguration {
                 video_codec_type: Some(media_codec::VIDEO_AV1),
-                ..cluster_base.clone()
+                ..cluster_base
             });
             cluster_codec_by_index.push(VideoCodec::Av1);
         }

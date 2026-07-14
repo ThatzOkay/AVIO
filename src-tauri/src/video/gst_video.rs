@@ -362,6 +362,7 @@ static NEXT_PLAYER_ID: AtomicU32 = AtomicU32::new(1);
 pub struct GstVideo {
     id: u32,
     runtime: Arc<VideoRuntime>,
+    #[allow(dead_code)]
     window: tauri::WebviewWindow,
     role: String,
     target_screen: String,
