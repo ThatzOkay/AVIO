@@ -21,7 +21,8 @@
     "security": {
       "csp": null
     },
-    "enableGTKAppId": true
+    "enableGTKAppId": true,
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

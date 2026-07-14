@@ -61,9 +61,23 @@ fn main() {
         }
     }
 
+    // protoc gets invoked with every proto file as its own argument. On Windows that
+    // command line (300+ absolute paths) exceeds CreateProcess's length limit and
+    // fails with "os error 206" (filename or extension too long) - even with a
+    // directly-invoked protoc.exe, not just a shim. protoc's own `@<file>` response-file
+    // syntax sidesteps this: the whole list goes into one file, and protoc alone (not
+    // the OS) reads it, so the actual process is started with a single short argument.
+    let argfile_path = out_dir.join("protos.list");
+    let argfile_contents = proto_files
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&argfile_path, argfile_contents).unwrap();
+
     prost_build::Config::new()
         .out_dir(&out_dir)
-        .compile_protos(&proto_files, &[protos_root])
+        .compile_protos(&[format!("@{}", argfile_path.display())], &[protos_root])
         .expect("failed to compile Android Auto / OpenAuto protobufs");
 
     // prost writes one `<package>.rs` file per unique `package` declaration, and

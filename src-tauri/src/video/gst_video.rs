@@ -395,25 +395,14 @@ impl GstVideo {
     }
 
     fn window_handle(&self) -> u64 {
-        #[cfg(target_os = "macos")]
-        {
-            self.window
-                .window()
-                .ns_view()
-                .map(|p| p as u64)
-                .unwrap_or(0)
-        }
-        #[cfg(windows)]
-        {
-            self.window
-                .window()
-                .hwnd()
-                .map(|h| h.0 as u64)
-                .unwrap_or(0)
-        }
-        #[cfg(not(any(target_os = "macos", windows)))]
-        {
-            0
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let Ok(handle) = self.window.window_handle() else {
+            return 0;
+        };
+        match handle.as_raw() {
+            RawWindowHandle::AppKit(h) => h.ns_view.as_ptr() as u64,
+            RawWindowHandle::Win32(h) => h.hwnd.get() as u64,
+            _ => 0,
         }
     }
 
@@ -572,12 +561,14 @@ impl GstVideo {
 pub fn set_mac_backdrop(window: &tauri::WebviewWindow, hex: &str) {
     #[cfg(target_os = "macos")]
     {
-        let Ok(handle) = window.window().ns_view() else {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let Ok(handle) = window.window_handle() else {
             return;
         };
-        if handle.is_null() {
+        let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
             return;
-        }
+        };
+        let handle = handle.ns_view.as_ptr();
         let (r, g, b) = hex_to_rgb255(Some(hex));
         gst_video::set_backdrop(
             handle as u64,

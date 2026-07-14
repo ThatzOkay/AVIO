@@ -370,6 +370,7 @@ dependencies = [
  "nusb",
  "openssl",
  "prost",
+ "raw-window-handle",
  "regex",
  "regex-split",
  "serde",
