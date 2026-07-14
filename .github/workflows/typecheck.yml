@@ -101,17 +101,25 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       # tauri-build's own build.rs checks that every `externalBin` in
-      # tauri.conf.json already exists on disk whenever the `avio` crate is
-      # compiled at all, not just during `tauri build`. `bun run tauri build`
-      # satisfies this via beforeBuildCommand (scripts/build-gst-host-sidecar.ts),
-      # but plain `cargo clippy` bypasses that hook, so it's reproduced here.
-      - name: Build gst-host sidecar (required by tauri-build's externalBin check)
+      # tauri.conf.json already exists on disk, and that every `bundle.resources`
+      # glob matches at least one file, whenever the `avio` crate is compiled at
+      # all - not just during `tauri build`. `bun run tauri build` satisfies both
+      # via beforeBuildCommand (the gst-host and avio-compositor sidecar scripts),
+      # but plain `cargo clippy` bypasses that hook, so they're reproduced here.
+      # The compositor placeholder doesn't need to be a real binary - clippy only
+      # needs `compositor/**/*` to resolve to *something*, and building the real
+      # thing would drag the whole meson/wlroots toolchain into a lint job.
+      - name: Satisfy tauri-build's externalBin/resources checks
         run: |
           set -euo pipefail
           cargo build -p gst-video --bin gst-host
           TARGET_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
           mkdir -p src-tauri/binaries
           cp target/debug/gst-host "src-tauri/binaries/gst-host-${TARGET_TRIPLE}"
+
+          mkdir -p src-tauri/compositor
+          echo "placeholder for CI lint only - real bundle is built by scripts/build-avio-compositor-sidecar.ts" \
+            > src-tauri/compositor/placeholder.txt
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings

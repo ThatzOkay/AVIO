@@ -30,8 +30,7 @@
       "binaries/gst-host"
     ],
     "resources": [
-      "assets/**/*",
-      "compositor/**/*"
+      "assets/**/*"
     ],
     "icon": [
       "icons/32x32.png",
