@@ -27,7 +27,14 @@ jobs:
 
       - name: Setup bun
         run: |
+          set -euo pipefail
           curl -fsSL https://bun.com/install | bash
+          BUN_BIN="$HOME/.bun/bin"
+          # bun's installer only appends PATH to ~/.bash_profile, which this
+          # non-login shell never sources - export it for the rest of this step,
+          # and write to GITHUB_PATH for every later step.
+          export PATH="$BUN_BIN:$PATH"
+          echo "$BUN_BIN" >> "$GITHUB_PATH"
           echo "bun version: $(bun -v)"
           node -e "const v=require('child_process').execSync('bun -v').toString().trim(); if(!/^1\\./.test(v)){console.error('Expected bun 1.x, got', v); process.exit(1);} console.log('bun 1 OK');"
 
