@@ -501,22 +501,16 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 static void seat_request_cursor(struct wl_listener *listener, void *data) {
 	struct tinywl_server *server = wl_container_of(
 			listener, server, request_cursor);
-	struct wlr_seat_pointer_request_set_cursor_event *event = data;
-	struct wlr_seat_client *focused_client =
-		server->seat->pointer_state.focused_client;
-	if (focused_client == event->seat_client) {
-		wlr_cursor_set_surface(server->cursor, event->surface,
-				event->hotspot_x, event->hotspot_y);
-	}
+	(void)data;
+	// AVIO: touchscreen kiosk, no visible pointer wanted - ignore clients' own cursor images too.
+	wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
 }
 
 static void seat_pointer_focus_change(struct wl_listener *listener, void *data) {
 	struct tinywl_server *server = wl_container_of(
 			listener, server, pointer_focus_change);
-	struct wlr_seat_pointer_focus_change_event *event = data;
-	if (event->new_surface == NULL) {
-		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
-	}
+	(void)data;
+	wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
 }
 
 static void seat_request_set_selection(struct wl_listener *listener, void *data) {
@@ -646,18 +640,6 @@ static enum avio_deco_hit deco_hit_test(struct tinywl_server *server, double lx,
 	return AVIO_DECO_NONE;
 }
 
-static const char *resize_cursor_name(uint32_t edges) {
-	bool b = (edges & WLR_EDGE_BOTTOM) != 0;
-	bool l = (edges & WLR_EDGE_LEFT) != 0;
-	bool r = (edges & WLR_EDGE_RIGHT) != 0;
-	if (b && l) return "sw-resize";
-	if (b && r) return "se-resize";
-	if (b) return "s-resize";
-	if (l) return "w-resize";
-	if (r) return "e-resize";
-	return "default";
-}
-
 static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
 		process_cursor_move(server);
@@ -669,11 +651,10 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 
 	struct avio_screen *ds = NULL;
 	uint32_t dedges = 0;
-	enum avio_deco_hit dh = deco_hit_test(server, server->cursor->x, server->cursor->y,
-			&ds, &dedges);
+	deco_hit_test(server, server->cursor->x, server->cursor->y, &ds, &dedges);
 	if (ds != NULL) {
-		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr,
-			dh == AVIO_DECO_RESIZE ? resize_cursor_name(dedges) : "default");
+		// AVIO: touchscreen kiosk, no visible pointer wanted.
+		wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
 		wlr_seat_pointer_clear_focus(server->seat);
 		return;
 	}
@@ -684,7 +665,7 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	struct tinywl_toplevel *toplevel = desktop_toplevel_at(server,
 			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 	if (!toplevel) {
-		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+		wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
 	}
 	if (surface) {
 		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
@@ -2087,6 +2068,12 @@ int main(int argc, char *argv[]) {
 	if (server.n_screens == 0) {
 		snprintf(server.screens[0].role, sizeof(server.screens[0].role), "main");
 		server.n_screens = 1;
+	}
+	// Kiosk default: start every screen fullscreen (no titlebar). This compositor only ever
+	// runs this one app, so there's no windowed-desktop case to preserve the chrome for; the
+	// client's own request_fullscreen (avio_toggle_fullscreen's button) can still flip it off.
+	for (int i = 0; i < server.n_screens; i++) {
+		server.screens[i].fullscreen = true;
 	}
 
 	server.wl_display = wl_display_create();
