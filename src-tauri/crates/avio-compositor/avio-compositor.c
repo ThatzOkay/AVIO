@@ -1577,7 +1577,11 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 			if (ui_app == NULL) {
 				ui_app = "dev.f-io.avio";
 			}
-			if (!(app_id && strcmp(app_id, ui_app) == 0)) {
+			// Only the first same-app_id toplevel claims s->ui (the "main" window this screen
+			// tracks for shutdown purposes) — later ones (e.g. tauri's native message dialogs,
+			// which share the app's app_id rather than getting their own) must NOT steal that
+			// slot, or their eventual close gets misread as the main app quitting.
+			if (!(app_id && strcmp(app_id, ui_app) == 0) || s->ui != NULL) {
 				toplevel->is_dialog = true;
 				wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
 			} else {

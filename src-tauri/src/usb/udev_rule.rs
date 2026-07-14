@@ -107,6 +107,19 @@ fn udev_rule_is_current(app: &AppHandle) -> Result<bool, Box<dyn std::error::Err
     Ok(current_content.contains(&expected_content))
 }
 
+// Tells the nested avio-compositor (if we're running under one) to re-exec itself once our
+// toplevel goes away, instead of tearing down the whole kiosk session (cage/login/getty) — see
+// avio-compositor.c's "restart" control-socket command and `full_restart` flag.
+fn request_compositor_restart() {
+    let Ok(path) = std::env::var("AVIO_COMPOSITOR_CTRL") else {
+        return;
+    };
+    use std::io::Write;
+    if let Ok(mut sock) = std::os::unix::net::UnixStream::connect(&path) {
+        let _ = sock.write_all(b"restart\n");
+    }
+}
+
 fn pkexec_available() -> bool {
     std::process::Command::new("which")
         .arg("pkexec")
@@ -241,6 +254,7 @@ pub async fn check_and_install_udev_rule(app: &AppHandle) -> bool {
         .title("Installation Complete")
         .buttons(tauri_plugin_dialog::MessageDialogButtons::Ok)
         .show(move |_| {
+            request_compositor_restart();
             app_clone.exit(0);
             app_clone.restart();
         });
