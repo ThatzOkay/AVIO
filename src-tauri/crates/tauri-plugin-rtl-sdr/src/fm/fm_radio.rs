@@ -1,13 +1,15 @@
 use std::ffi::{c_char, c_int, c_void};
-use std::sync::Mutex;
+use std::sync::mpsc as std_mpsc;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
+use std::time::Duration;
 
 use desperado::dsp::decimator::Decimator;
 use desperado::dsp::DspBlock;
 use fmradio::rds::{RdsDecoder, RdsResamplerCustom, StereoDecoderPLL};
 use fmradio::{AdaptiveResampler, DeemphasisFilter, PhaseExtractor};
 use num_complex::Complex;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 
 type AudioCallback = Box<dyn Fn(Vec<f32>) + Send + Sync>;
 
@@ -53,7 +55,6 @@ impl FfiDevHandle {
     }
 }
 
-static FFI_DEV: Mutex<Option<FfiDevHandle>> = Mutex::new(None);
 static FFI_SAMPLE_RATE: Mutex<u32> = Mutex::new(2_048_000);
 
 static RDS_STATE: Mutex<RdsInfo> = Mutex::new(RdsInfo {
@@ -63,62 +64,178 @@ static RDS_STATE: Mutex<RdsInfo> = Mutex::new(RdsInfo {
     radio_text: None,
 });
 
-enum StreamCommand {
-    #[allow(dead_code)]
-    Tune(u32),
-    Stop,
+// Every libusb call for this device (open/close/retune/gain/cancel) is funneled through one
+// dedicated OS thread that exclusively owns the RtlSdrDev handle - never called directly from
+// async code. rtlsdr_set_center_freq (and friends) is a blocking control transfer that can, on
+// some USB host controllers (Raspberry Pi's dwc2 in particular), stall indefinitely if it
+// contends with the concurrent rtlsdr_read_async stream on the same device (see
+// ffi_read_callback's doc comment below). A single dedicated thread makes concurrent libusb
+// calls from two different Rust-level threads structurally impossible (not just mutex-guarded),
+// and callers await their reply through a timeout, so a stuck call only ever leaks that one
+// background thread instead of blocking a Tokio worker thread (which, on a resource-constrained
+// device, can starve the whole app) or hanging every other radio command behind the same
+// `Arc<Mutex<RadioService>>` guard forever.
+enum DeviceCmd {
+    Open {
+        index: u32,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    Close {
+        reply: oneshot::Sender<()>,
+    },
+    SetSampleRate {
+        rate: u32,
+        reply: oneshot::Sender<i32>,
+    },
+    SetGain {
+        gain: i32,
+        reply: oneshot::Sender<()>,
+    },
+    SetFrequency {
+        freq_hz: u32,
+        reply: oneshot::Sender<i32>,
+    },
+    CancelAsync {
+        reply: oneshot::Sender<()>,
+    },
+    /// Hands a clone of the device handle to `fm_read`'s own dedicated read thread, which then
+    /// calls `rtlsdr_read_async` (a long-running blocking call) directly on that thread - never
+    /// on this one, or a streaming session would block every other device command indefinitely.
+    GetDeviceForRead {
+        reply: oneshot::Sender<Option<FfiDevHandle>>,
+    },
 }
 
-static CMD_TX: Mutex<Option<UnboundedSender<StreamCommand>>> = Mutex::new(None);
+const DEVICE_CMD_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub fn fm_open(index: u32) -> Result<i32, String> {
-    let ffi_count = unsafe { rtlsdr_get_device_count() };
-    if (index as usize) < ffi_count as usize {
-        let mut dev: RtlSdrDev = std::ptr::null_mut();
-        let result = unsafe { rtlsdr_open(&mut dev, index) };
-        if result == 0 {
-            *FFI_DEV.lock().unwrap() = Some(FfiDevHandle(dev));
-            return Ok(0);
-        }
-    }
-    Err("Failed to open device".into())
+static DEVICE_CMD_TX: OnceLock<std_mpsc::Sender<DeviceCmd>> = OnceLock::new();
+
+fn device_cmd_tx() -> &'static std_mpsc::Sender<DeviceCmd> {
+    DEVICE_CMD_TX.get_or_init(|| {
+        let (tx, rx) = std_mpsc::channel::<DeviceCmd>();
+        thread::spawn(move || device_worker_loop(rx));
+        tx
+    })
 }
 
-pub fn fm_close() {
-    if let Some(FfiDevHandle(dev)) = FFI_DEV.lock().unwrap().take() {
-        unsafe {
-            rtlsdr_cancel_async(dev);
-            rtlsdr_close(dev);
-        }
-    }
-}
-
-pub fn fm_set_sample_rate(rate: u32) -> i32 {
-    *FFI_SAMPLE_RATE.lock().unwrap() = rate;
-    match FFI_DEV.lock().unwrap().as_ref() {
-        Some(FfiDevHandle(dev)) => unsafe { rtlsdr_set_sample_rate(*dev, rate) },
-        None => -1,
-    }
-}
-
-pub fn fm_set_gain(gain: i32) {
-    if let Some(FfiDevHandle(dev)) = FFI_DEV.lock().unwrap().as_ref() {
-        unsafe {
-            if gain < 0 {
-                rtlsdr_set_tuner_gain_mode(*dev, 0);
-            } else {
-                rtlsdr_set_tuner_gain_mode(*dev, 1);
-                rtlsdr_set_tuner_gain(*dev, gain);
+fn device_worker_loop(rx: std_mpsc::Receiver<DeviceCmd>) {
+    let mut dev: Option<FfiDevHandle> = None;
+    while let Ok(cmd) = rx.recv() {
+        match cmd {
+            DeviceCmd::Open { index, reply } => {
+                let result = (|| {
+                    let ffi_count = unsafe { rtlsdr_get_device_count() };
+                    if (index as usize) >= ffi_count as usize {
+                        return Err("Failed to open device".to_string());
+                    }
+                    let mut d: RtlSdrDev = std::ptr::null_mut();
+                    let r = unsafe { rtlsdr_open(&mut d, index) };
+                    if r != 0 {
+                        return Err("Failed to open device".to_string());
+                    }
+                    dev = Some(FfiDevHandle(d));
+                    Ok(())
+                })();
+                let _ = reply.send(result);
+            }
+            DeviceCmd::Close { reply } => {
+                if let Some(d) = dev.take() {
+                    unsafe {
+                        rtlsdr_cancel_async(d.ptr());
+                        rtlsdr_close(d.ptr());
+                    }
+                }
+                let _ = reply.send(());
+            }
+            DeviceCmd::SetSampleRate { rate, reply } => {
+                *FFI_SAMPLE_RATE.lock().unwrap() = rate;
+                let r = match &dev {
+                    Some(d) => unsafe { rtlsdr_set_sample_rate(d.ptr(), rate) },
+                    None => -1,
+                };
+                let _ = reply.send(r);
+            }
+            DeviceCmd::SetGain { gain, reply } => {
+                if let Some(d) = &dev {
+                    unsafe {
+                        if gain < 0 {
+                            rtlsdr_set_tuner_gain_mode(d.ptr(), 0);
+                        } else {
+                            rtlsdr_set_tuner_gain_mode(d.ptr(), 1);
+                            rtlsdr_set_tuner_gain(d.ptr(), gain);
+                        }
+                    }
+                }
+                let _ = reply.send(());
+            }
+            DeviceCmd::SetFrequency { freq_hz, reply } => {
+                let r = match &dev {
+                    Some(d) => unsafe { rtlsdr_set_center_freq(d.ptr(), freq_hz) },
+                    None => -1,
+                };
+                let _ = reply.send(r);
+            }
+            DeviceCmd::CancelAsync { reply } => {
+                if let Some(d) = &dev {
+                    unsafe {
+                        rtlsdr_cancel_async(d.ptr());
+                    }
+                }
+                let _ = reply.send(());
+            }
+            DeviceCmd::GetDeviceForRead { reply } => {
+                let cloned = dev.as_ref().map(|d| FfiDevHandle(d.ptr()));
+                let _ = reply.send(cloned);
             }
         }
     }
 }
 
-pub fn fm_set_frequency(freq: u32) -> i32 {
-    match FFI_DEV.lock().unwrap().as_ref() {
-        Some(FfiDevHandle(dev)) => unsafe { rtlsdr_set_center_freq(*dev, freq) },
-        None => -1,
+/// Sends a device command and waits up to `DEVICE_CMD_TIMEOUT` for its reply. `None` means the
+/// call timed out - almost certainly the device thread is itself stuck inside a libusb call (see
+/// the module doc comment above `DeviceCmd`). The underlying OS thread is left running rather
+/// than aborted (Rust can't safely cancel a blocking native call), but the caller gets control
+/// back immediately instead of hanging indefinitely.
+async fn send_device_cmd<T: Send + 'static>(
+    build: impl FnOnce(oneshot::Sender<T>) -> DeviceCmd,
+) -> Option<T> {
+    let (reply_tx, reply_rx) = oneshot::channel();
+    device_cmd_tx().send(build(reply_tx)).ok()?;
+    tokio::time::timeout(DEVICE_CMD_TIMEOUT, reply_rx)
+        .await
+        .ok()?
+        .ok()
+}
+
+pub async fn fm_open(index: u32) -> Result<i32, String> {
+    match send_device_cmd(|reply| DeviceCmd::Open { index, reply }).await {
+        Some(Ok(())) => Ok(0),
+        Some(Err(e)) => Err(e),
+        None => Err("Timed out opening RTL-SDR device".to_string()),
     }
+}
+
+pub async fn fm_close() {
+    send_device_cmd(|reply| DeviceCmd::Close { reply }).await;
+}
+
+pub async fn fm_set_sample_rate(rate: u32) -> i32 {
+    send_device_cmd(|reply| DeviceCmd::SetSampleRate { rate, reply })
+        .await
+        .unwrap_or(-1)
+}
+
+pub async fn fm_set_gain(gain: i32) {
+    send_device_cmd(|reply| DeviceCmd::SetGain { gain, reply }).await;
+}
+
+pub async fn fm_set_frequency(freq: u32) -> i32 {
+    send_device_cmd(|reply| DeviceCmd::SetFrequency {
+        freq_hz: freq,
+        reply,
+    })
+    .await
+    .unwrap_or(-1)
 }
 
 fn update_rds_state(rds: RdsInfo) {
@@ -144,13 +261,13 @@ extern "C" fn ffi_read_callback(buf: *mut u8, len: u32, ctx: *mut std::os::raw::
     let _ = tx.send(bytes);
 }
 
-pub fn fm_read(
+pub async fn fm_read(
     callback: AudioCallback,
     output_rate: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dev = match FFI_DEV.lock().unwrap().as_ref() {
-        Some(FfiDevHandle(dev)) => FfiDevHandle(*dev),
-        None => return Err("No device available".into()),
+    let dev = match send_device_cmd(|reply| DeviceCmd::GetDeviceForRead { reply }).await {
+        Some(Some(dev)) => dev,
+        _ => return Err("No device available".into()),
     };
     let input_rate = *FFI_SAMPLE_RATE.lock().unwrap();
     let mut demod = FmDemod::new(input_rate, output_rate)?;
@@ -183,15 +300,7 @@ pub fn fm_read(
 }
 
 pub async fn fm_stop() {
-    if let Some(FfiDevHandle(dev)) = FFI_DEV.lock().unwrap().as_ref() {
-        unsafe {
-            rtlsdr_cancel_async(*dev);
-        }
-    }
-
-    if let Some(tx) = CMD_TX.lock().unwrap().take() {
-        let _ = tx.send(StreamCommand::Stop);
-    }
+    send_device_cmd(|reply| DeviceCmd::CancelAsync { reply }).await;
 }
 
 #[derive(Clone)]

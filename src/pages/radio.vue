@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 interface StationInfo {
   program_id: number;
@@ -99,13 +99,30 @@ function onPresetPointerCancel() {
   }
 }
 
-onMounted(() => {
-  refresh();
+let unlistenFmState: UnlistenFn | null = null;
 
-  listen("fm-state", (event) => {
+onMounted(async () => {
+  await refresh();
+  applyState(await invoke<RadioState>('start', { frequency: frequency.value }));
+
+  unlistenFmState = await listen("fm-state", (event) => {
     const state = event.payload as RadioState;
     applyState(state);
   });
+});
+
+// Leaving the FM tab (DAB is a placeholder today, but this holds regardless of what's
+// implemented behind it) or leaving the page entirely should release the SDR hardware -
+// otherwise the RTL-SDR read/DSP threads keep running in the background indefinitely.
+watch(tab, (newTab, oldTab) => {
+  if (oldTab === 'fm' && newTab !== 'fm') {
+    invoke('stop').catch(() => {});
+  }
+});
+
+onUnmounted(() => {
+  invoke('stop').catch(() => {});
+  unlistenFmState?.();
 });
 </script>
 

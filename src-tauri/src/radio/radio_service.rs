@@ -196,7 +196,14 @@ impl RadioService {
         };
 
         match serde_json::to_value(&radio_config) {
-            Ok(value) => store.set("radio", value),
+            Ok(value) => {
+                store.set("radio", value);
+                // `set` only updates the in-memory store; without `save` the config.json
+                // file on disk never actually changes.
+                if let Err(e) = store.save() {
+                    eprintln!("Failed to save radio config: {}", e);
+                }
+            }
             Err(e) => eprintln!("Failed to serialize radio config: {}", e),
         }
 

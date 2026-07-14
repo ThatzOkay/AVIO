@@ -126,17 +126,17 @@ impl FMRadioService {
         }
 
         if !self.device_open {
-            let open_result = fm_open(0).map_err(|e| e.to_string());
+            let open_result = fm_open(0).await.map_err(|e| e.to_string());
             if let Err(e) = open_result {
                 eprintln!("Failed to open device: {e}");
                 return;
             }
             self.device_open = true;
-            fm_set_sample_rate(SAMPLE_RATE);
-            fm_set_gain(200);
+            fm_set_sample_rate(SAMPLE_RATE).await;
+            fm_set_gain(200).await;
         }
 
-        fm_set_frequency(freq * 1000);
+        fm_set_frequency(freq * 1000).await;
 
         let options = AudioOutputOptions {
             sample_rate: OUTPUT_RATE as i32,
@@ -160,7 +160,9 @@ impl FMRadioService {
                 let _ = tx.send(buff);
             }),
             OUTPUT_RATE,
-        ) {
+        )
+        .await
+        {
             eprintln!("Failed to start FM read: {}", e);
             return;
         }
@@ -210,7 +212,7 @@ impl FMRadioService {
 
         if self.device_open {
             fm_stop().await;
-            fm_close();
+            fm_close().await;
             self.device_open = false;
         }
 
@@ -243,7 +245,7 @@ impl FMRadioService {
     async fn tune(&mut self, frequency: u32) {
         self.frequency = frequency;
         if self.running && self.device_open {
-            fm_set_frequency(frequency * 1000);
+            fm_set_frequency(frequency * 1000).await;
             *self.station_info.lock().unwrap() = None;
         }
 

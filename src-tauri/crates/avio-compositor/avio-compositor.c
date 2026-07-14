@@ -1299,6 +1299,11 @@ static void apply_ui_layout(struct avio_screen *s) {
 		wlr_xdg_toplevel_set_tiled(s->ui->xdg_toplevel,
 			WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT | WLR_EDGE_RIGHT);
 		wlr_xdg_toplevel_set_size(s->ui->xdg_toplevel, ow, oh - top);
+		// Tiled+size above is only an advisory suggestion - a client configured as
+		// non-resizable (this app's tauri.conf.json sets "resizable": false) can and does
+		// ignore it and keep its own fixed size. The formal fullscreen protocol state is
+		// authoritative instead, so send it too whenever we want this screen fullscreen.
+		wlr_xdg_toplevel_set_fullscreen(s->ui->xdg_toplevel, s->fullscreen);
 	}
 }
 
