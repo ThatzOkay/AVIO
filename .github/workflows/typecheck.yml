@@ -100,5 +100,18 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      # tauri-build's own build.rs checks that every `externalBin` in
+      # tauri.conf.json already exists on disk whenever the `avio` crate is
+      # compiled at all, not just during `tauri build`. `bun run tauri build`
+      # satisfies this via beforeBuildCommand (scripts/build-gst-host-sidecar.ts),
+      # but plain `cargo clippy` bypasses that hook, so it's reproduced here.
+      - name: Build gst-host sidecar (required by tauri-build's externalBin check)
+        run: |
+          set -euo pipefail
+          cargo build -p gst-video --bin gst-host
+          TARGET_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+          mkdir -p src-tauri/binaries
+          cp target/debug/gst-host "src-tauri/binaries/gst-host-${TARGET_TRIPLE}"
+
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
