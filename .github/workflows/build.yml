@@ -141,8 +141,14 @@ jobs:
           set -euo pipefail
           curl -fsSL https://bun.com/install | bash
           BUN_BIN="$HOME/.bun/bin"
-          echo "$BUN_BIN" >> "$GITHUB_PATH"
           "$BUN_BIN/bun" -v
+          # On Windows, GITHUB_PATH is consumed by later pwsh steps, which need a
+          # native Windows path (C:\...), not bash/git-bash's POSIX-style $HOME.
+          if command -v cygpath >/dev/null 2>&1; then
+            cygpath -w "$BUN_BIN" >> "$GITHUB_PATH"
+          else
+            echo "$BUN_BIN" >> "$GITHUB_PATH"
+          fi
 
       - name: Cache bun store
         uses: actions/cache@v5
@@ -167,7 +173,7 @@ jobs:
               libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
               protobuf-compiler \
               libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-              librtlsdr-dev libudev-dev \
+              librtlsdr-dev libudev-dev libasound2-dev \
               ninja-build bison patchelf \
               libegl-dev libgles-dev libgbm-dev libcairo2-dev \
               libxkbcommon-dev libpixman-1-dev \
@@ -251,6 +257,17 @@ jobs:
           set -euo pipefail
           sudo installer -pkg gst-runtime.pkg -target /
           sudo installer -pkg gst-devel.pkg -target /
+
+          FRAMEWORK_ROOT="/Library/Frameworks/GStreamer.framework/Versions/1.0"
+          if [ ! -d "$FRAMEWORK_ROOT" ]; then
+            echo "GStreamer.framework not found at $FRAMEWORK_ROOT" >&2
+            exit 1
+          fi
+          # pkg-config needs to be told where the .pc files are, and it must be the
+          # framework's own pkg-config (not Homebrew's) - see
+          # https://gstreamer.freedesktop.org/documentation/installing/on-mac-osx.html
+          echo "PKG_CONFIG_PATH=$FRAMEWORK_ROOT/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "$FRAMEWORK_ROOT/bin" >> "$GITHUB_PATH"
 
       - name: Install deps (bun) [macos]
         if: matrix.os == 'macos'
