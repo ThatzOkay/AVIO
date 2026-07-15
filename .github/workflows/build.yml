@@ -152,7 +152,14 @@ jobs:
       - name: Point PERL at MSYS2's perl [windows]
         if: matrix.os == 'windows'
         shell: pwsh
-        run: '"PERL=C:\msys64\usr\bin\perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8'
+        run: |
+          # OpenSSL's Configure bakes whatever path we pass here verbatim into
+          # the generated Makefile's $(PERL) variable, which `make depend` later
+          # invokes through an msys bash recipe line - a backslash-heavy Windows
+          # path gets its backslashes eaten there (unquoted shell escaping), so
+          # this has to be forward-slash form to survive both the direct Rust
+          # process spawn (Configure) and the later shell-embedded use (make).
+          "PERL=C:/msys64/usr/bin/perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
