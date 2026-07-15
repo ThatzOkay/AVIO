@@ -3,6 +3,9 @@ import { useRoute, useRouter } from "vue-router";
 import androidAutoIcon from "../assets/icons/android-auto.png";
 import radioIcon from "../assets/icons/aosp_ic_launcher_radio.png";
 import settingsIcon from "../assets/icons/aosp_ic_launcher_settings.png";
+import { useStatusStore } from "@/store/statusStore";
+
+const statusStore = useStatusStore();
 
 const route = useRoute();
 const router = useRouter();
@@ -21,7 +24,7 @@ const router = useRouter();
         <v-img :src="androidAutoIcon" width="64" height="64" contain />
       </v-btn>
 
-      <v-btn value="/radio">
+      <v-btn v-if="statusStore.rtlSdrDetected" value="/radio">
         <v-img :src="radioIcon" width="64" height="64" contain />
       </v-btn>
 
