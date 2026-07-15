@@ -1,5 +1,5 @@
 use std::sync::mpsc as std_mpsc;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{OnceLock};
 use std::thread;
 use std::time::Duration;
 
