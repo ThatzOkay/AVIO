@@ -143,54 +143,21 @@ jobs:
           path-type: inherit
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2 perl
 
-      # This runner has 3 MinGW installs on PATH: the runner's own
-      # C:\mingw64 (a different distro build - MinGW-Builds - than MSYS2's
-      # own gcc), MSYS2's (installed above, root varies by runner image -
-      # resolved dynamically below rather than hardcoded), and Strawberry
-      # Perl's. openssl-sys's vendored build shells out to bare `perl`,
-      # which resolves to Strawberry's (POSIX-hostile, rejected by
-      # Configure for a mingw64 target) since C:\mingw64 ships no perl at
-      # all. cc-rs (welle-io-sys's cxx_build, and any other -sys crate)
-      # resolves a bare gcc/g++ to C:\mingw64's copy, which has no fftw3
-      # headers (only MSYS2's mingw64/include does). Pin both to MSYS2's
-      # copies - cc-rs's override vars keep the exact names cc-rs itself
-      # reports, e.g. CXXFLAGS_x86_64-pc-windows-gnu.
-      #
-      # CC/CXX point at small .cmd wrappers rather than gcc.exe/g++.exe
-      # directly: gcc/g++'s real compiler binary (cc1plus.exe etc., under
-      # mingw64/lib/gcc/...) dynamically loads runtime DLLs that live in
-      # mingw64/bin, which Windows' DLL search only finds via PATH (not the
-      # calling process's own directory). But mingw64/bin can't just be
-      # added to the job's PATH: rustc's own default GNU-target linker
-      # (x86_64-w64-mingw32-gcc, used even for pure-Rust build scripts with
-      # no C/C++ of their own) resolves the same tool names by bare PATH
-      # search, and needs C:\mingw64\bin - the toolchain rustc's prebuilt
-      # std is actually built against - to win that lookup. Since
-      # C:\mingw64 also ships its own (incompatible) same-named DLLs,
-      # whichever install is first on PATH wins for *both* consumers at
-      # once, and there's no ordering that satisfies both. The wrapper
-      # scripts set PATH=mingw64/bin;... only for the child process they
-      # exec, so MSYS2's g++ finds its own DLLs first without touching the
-      # job's global PATH or rustc's unrelated linker resolution at all.
-      - name: Resolve MSYS2 mingw64 toolchain [windows]
+      # Don't redirect cc-rs's compiler to MSYS2: rustc's own final-link
+      # step always uses the runner's separate C:\mingw64, so compiling with
+      # a different MinGW distro produces ABI-mismatched object code
+      # (undefined __imp__vsnprintf etc). Only fftw3 headers/libs are
+      # actually needed from MSYS2 - welle-io-sys/build.rs's Windows branch
+      # adds those directly (like its macOS branch does via brew), so just
+      # expose MSYS2's root (varies by runner image) for it to read. PERL
+      # still needs pinning: bare `perl` resolves to Strawberry's
+      # POSIX-hostile one, which OpenSSL's Configure rejects.
+      - name: Resolve MSYS2 paths [windows]
         if: matrix.os == 'windows'
         shell: msys2 {0}
         run: |
           echo "PERL=$(cygpath -m /usr/bin/perl.exe)" >> "$GITHUB_ENV"
-
-          wrap_dir="$(cygpath -u "$RUNNER_TEMP")/mingw-wrappers"
-          mkdir -p "$wrap_dir"
-          mingw_bin="$(cygpath -m /mingw64/bin)"
-          for tool in gcc g++; do
-            cat > "$wrap_dir/$tool.cmd" <<EOF
-          @echo off
-          set PATH=$mingw_bin;%PATH%
-          "$mingw_bin/$tool.exe" %*
-          EOF
-          done
-
-          echo "CC_x86_64-pc-windows-gnu=$(cygpath -m "$wrap_dir/gcc.cmd")" >> "$GITHUB_ENV"
-          echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m "$wrap_dir/g++.cmd")" >> "$GITHUB_ENV"
+          echo "MSYS2_MINGW64_ROOT=$(cygpath -m /mingw64)" >> "$GITHUB_ENV"
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
@@ -460,41 +427,22 @@ jobs:
       # vendored under src-tauri/crates/tauri-plugin-rtl-sdr/vendor/windows-x64/
       # - see the README there. build.rs adds it to the linker search path and
       # tauri.windows.conf.json bundles the DLL next to the exe, so nothing needs
-      # to be fetched or generated here.
+      # to be fetched or generated here. Its dll.a re-exports librtlsdr.dll's own
+      # pthread_* symbols (upstream statically links pthreads into the DLL and
+      # exports them), which collide with MinGW's own libpthread.a at link time
+      # ("multiple definition") - allow it rather than trying to suppress one side.
 
       - name: Install deps (bun) [windows]
         if: matrix.os == 'windows'
         shell: pwsh
         run: bun install --frozen-lockfile
 
-      # Verifies the MinGW toolchain pinning above: which binary each
-      # gcc/g++/linker name actually resolves to, and the full PATH order.
-      - name: Diagnose Windows GNU toolchain resolution [windows]
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          foreach ($tool in @('gcc', 'g++', 'x86_64-w64-mingw32-gcc', 'x86_64-w64-mingw32-g++', 'ld', 'collect2', 'as')) {
-            Write-Host "--- ${tool} ---"
-            $found = Get-Command $tool -ErrorAction SilentlyContinue -All
-            if ($found) {
-              $found | ForEach-Object { Write-Host $_.Source }
-              & $tool --version 2>&1 | Select-Object -First 1
-            } else {
-              Write-Host "not found on PATH"
-            }
-          }
-          Write-Host "--- PATH ---"
-          $env:PATH -split ';' | ForEach-Object { Write-Host $_ }
-          Write-Host "--- env CC/CXX ---"
-          Write-Host "CC_x86_64-pc-windows-gnu=${env:CC_x86_64-pc-windows-gnu}"
-          Write-Host "CXX_x86_64-pc-windows-gnu=${env:CXX_x86_64-pc-windows-gnu}"
-
       - name: Build (tauri) [windows]
         if: matrix.os == 'windows'
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition'
         with:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'

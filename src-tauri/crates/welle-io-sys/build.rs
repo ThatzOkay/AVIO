@@ -32,6 +32,18 @@ fn main() {
         }
     }
 
+    // fftw3 has no MinGW package for the runner's default C:\mingw64 toolchain,
+    // so CI installs it via MSYS2 instead (mingw-w64-x86_64-fftw) and points us
+    // at that install's root here - deliberately not compiling with MSYS2's own
+    // gcc/g++ instead, since that produces object code whose CRT expectations
+    // don't match what rustc's own linker (always C:\mingw64) links against.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        if let Ok(root) = std::env::var("MSYS2_MINGW64_ROOT") {
+            build.include(format!("{root}/include"));
+            println!("cargo:rustc-link-search=native={root}/lib");
+        }
+    }
+
     build.compile("welle-io-sys-bridge");
 
     println!("cargo:rerun-if-changed=src/lib.rs");
