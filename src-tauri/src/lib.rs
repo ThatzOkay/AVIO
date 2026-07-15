@@ -45,6 +45,7 @@ pub fn run() {
             if let Some(monitor) = main_window.current_monitor().ok().flatten() {
                 main_window.set_size(*monitor.size()).ok();
                 main_window.center().ok();
+                main_window.set_fullscreen(true).ok();
             }
 
             main_window.show().ok();
