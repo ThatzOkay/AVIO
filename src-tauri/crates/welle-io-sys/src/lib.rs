@@ -27,6 +27,7 @@ mod ffi {
         #[allow(dead_code)]
         fn setNewDynamicLabelCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(String));
             
+        #[allow(dead_code)]
         fn setMotCallback(self: Pin<&mut WelleIoBridge>, callback: extern "C" fn(motfile: &mot_file_t));
     }
 }
@@ -60,7 +61,6 @@ fn device_worker_loop(rx: std_mpsc::Receiver<DeviceCmd>) {
     //let mut dev: Option<ffi::UniquePtr<ffi::WelleIoBridge>> = None;
     while let Ok(cmd) = rx.recv() {
         match cmd {
-            _ => {}
         }
     }
 }
