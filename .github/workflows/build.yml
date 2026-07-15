@@ -143,59 +143,54 @@ jobs:
           path-type: inherit
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2 perl
 
-      # openssl-sys's vendored build (avio depends on openssl with the
-      # "vendored" feature) shells out to `perl ./Configure`, which finds the
-      # runner's preinstalled Strawberry Perl (POSIX-hostile, reports MSWin32
-      # with backslash paths that Configure rejects for a mingw64 target)
-      # ahead of MSYS2's on PATH - C:\mingw64\bin (see below) ships no perl at
-      # all, so this one genuinely is a Strawberry-shadowing problem. And
-      # cc-rs (used by welle-io-sys's cxx_build script and any other -sys
-      # crate) resolves a bare "gcc"/"g++" off PATH and lands on C:\mingw64's
-      # copy, which has no fftw3 headers (those are pacman-installed only
-      # into MSYS2's own mingw64/include). Pin both explicitly to MSYS2's
-      # copies, resolved via `cygpath -m` from inside the MSYS2 shell itself
-      # rather than hardcoding an install root (e.g. C:\msys64) - that guess
-      # doesn't hold on every runner image (this one uses D:\a\_temp\msys64),
-      # and cygpath -m already returns the forward-slash form both OpenSSL's
-      # Configure/make and cc-rs need (backslashes get eaten when Configure's
-      # output is later invoked through an msys bash recipe line in `make
-      # depend`). cc-rs's override vars keep the exact names cc-rs itself
+      # This runner has 3 MinGW installs on PATH: the runner's own
+      # C:\mingw64 (a different distro build - MinGW-Builds - than MSYS2's
+      # own gcc), MSYS2's (installed above, root varies by runner image -
+      # resolved dynamically below rather than hardcoded), and Strawberry
+      # Perl's. openssl-sys's vendored build shells out to bare `perl`,
+      # which resolves to Strawberry's (POSIX-hostile, rejected by
+      # Configure for a mingw64 target) since C:\mingw64 ships no perl at
+      # all. cc-rs (welle-io-sys's cxx_build, and any other -sys crate)
+      # resolves a bare gcc/g++ to C:\mingw64's copy, which has no fftw3
+      # headers (only MSYS2's mingw64/include does). Pin both to MSYS2's
+      # copies - cc-rs's override vars keep the exact names cc-rs itself
       # reports, e.g. CXXFLAGS_x86_64-pc-windows-gnu.
-      - name: Resolve MSYS2 mingw64 toolchain paths [windows]
+      #
+      # CC/CXX point at small .cmd wrappers rather than gcc.exe/g++.exe
+      # directly: gcc/g++'s real compiler binary (cc1plus.exe etc., under
+      # mingw64/lib/gcc/...) dynamically loads runtime DLLs that live in
+      # mingw64/bin, which Windows' DLL search only finds via PATH (not the
+      # calling process's own directory). But mingw64/bin can't just be
+      # added to the job's PATH: rustc's own default GNU-target linker
+      # (x86_64-w64-mingw32-gcc, used even for pure-Rust build scripts with
+      # no C/C++ of their own) resolves the same tool names by bare PATH
+      # search, and needs C:\mingw64\bin - the toolchain rustc's prebuilt
+      # std is actually built against - to win that lookup. Since
+      # C:\mingw64 also ships its own (incompatible) same-named DLLs,
+      # whichever install is first on PATH wins for *both* consumers at
+      # once, and there's no ordering that satisfies both. The wrapper
+      # scripts set PATH=mingw64/bin;... only for the child process they
+      # exec, so MSYS2's g++ finds its own DLLs first without touching the
+      # job's global PATH or rustc's unrelated linker resolution at all.
+      - name: Resolve MSYS2 mingw64 toolchain [windows]
         if: matrix.os == 'windows'
-        id: resolve_msys2
         shell: msys2 {0}
         run: |
           echo "PERL=$(cygpath -m /usr/bin/perl.exe)" >> "$GITHUB_ENV"
-          echo "CC_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/gcc.exe)" >> "$GITHUB_ENV"
-          echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/g++.exe)" >> "$GITHUB_ENV"
-          echo "mingw_bin=$(cygpath -m /mingw64/bin)" >> "$GITHUB_OUTPUT"
 
-      # gcc/g++ resolve fine by the full path pinned above, but the real C++
-      # compiler binary (cc1plus.exe, under mingw64/lib/gcc/...) dynamically
-      # loads runtime DLLs (libstdc++-6.dll, libgcc_s_seh-1.dll,
-      # libwinpthread-1.dll, ...) that live in mingw64/bin - Windows' DLL
-      # search order only checks the *loaded module's own* directory plus
-      # PATH, not the calling process's exe directory - so without
-      # mingw64/bin on PATH, cc1plus fails to start with no diagnostic output
-      # at all (just a bare nonzero exit). But this MUST be appended, not
-      # prepended: rustc's own default linker for plain Rust crates
-      # (x86_64-w64-mingw32-gcc, used even for pure-Rust build scripts like
-      # proc-macro2/quote - nothing to do with cc-rs or our CC/CXX pins
-      # above) resolves *that* name by bare PATH search too, and the runner
-      # ships its own separate pre-provisioned MinGW at C:\mingw64\bin for
-      # exactly that purpose. Prepending MSYS2's copy ahead of it swaps out
-      # the toolchain rustc's prebuilt GNU-target std was actually tested
-      # against, which surfaced as an obscure "ld returned 57 exit status"
-      # link failure on proc-macro2 with no useful diagnostic. Appending
-      # keeps C:\mingw64\bin first for that lookup while still making
-      # mingw64/bin's DLLs discoverable (PATH is searched in full, not just
-      # up to the first hit) for our explicitly-pinned absolute-path CC/CXX.
-      - name: Append MSYS2 mingw64/bin to PATH [windows]
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          "PATH=$env:PATH;${{ steps.resolve_msys2.outputs.mingw_bin }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          wrap_dir="$(cygpath -u "$RUNNER_TEMP")/mingw-wrappers"
+          mkdir -p "$wrap_dir"
+          mingw_bin="$(cygpath -m /mingw64/bin)"
+          for tool in gcc g++; do
+            cat > "$wrap_dir/$tool.cmd" <<EOF
+          @echo off
+          set PATH=$mingw_bin;%PATH%
+          "$mingw_bin/$tool.exe" %*
+          EOF
+          done
+
+          echo "CC_x86_64-pc-windows-gnu=$(cygpath -m "$wrap_dir/gcc.cmd")" >> "$GITHUB_ENV"
+          echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m "$wrap_dir/g++.cmd")" >> "$GITHUB_ENV"
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
@@ -472,12 +467,8 @@ jobs:
         shell: pwsh
         run: bun install --frozen-lockfile
 
-      # Diagnostic: proc-macro2/quote's build script (pure Rust, no C/C++ of
-      # its own) is failing to link via rustc's default `x86_64-w64-mingw32-gcc`
-      # driver with a bare `ld returned 57 exit status` and no other detail.
-      # That name isn't one we pin - it's whatever rustc's GNU target resolves
-      # off PATH - so before guessing again, dump exactly which binary answers
-      # to each relevant name and what toolchain it's actually from.
+      # Verifies the MinGW toolchain pinning above: which binary each
+      # gcc/g++/linker name actually resolves to, and the full PATH order.
       - name: Diagnose Windows GNU toolchain resolution [windows]
         if: matrix.os == 'windows'
         shell: pwsh
