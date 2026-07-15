@@ -167,6 +167,15 @@ jobs:
           echo "PERL=$(cygpath -m /usr/bin/perl.exe)" >> "$GITHUB_ENV"
           echo "CC_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/gcc.exe)" >> "$GITHUB_ENV"
           echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/g++.exe)" >> "$GITHUB_ENV"
+          # gcc/g++ resolve fine by full path, but the real C++ compiler binary
+          # (cc1plus.exe, under mingw64/lib/gcc/...) dynamically loads runtime
+          # DLLs (libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll, ...)
+          # that live in mingw64/bin - Windows' DLL search order only checks the
+          # *loaded module's own* directory plus PATH, not the calling process's
+          # exe directory, so invoking g++.exe by absolute path alone isn't
+          # enough: mingw64/bin has to be on PATH too, or cc1plus fails to start
+          # with no diagnostic output at all (just a bare nonzero exit).
+          echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
