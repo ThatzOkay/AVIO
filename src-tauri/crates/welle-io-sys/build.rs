@@ -11,7 +11,7 @@ fn main() {
         .include("vendor/welle.io/src/backend")
         .include("vendor/welle.io/src/various")
         .include("vendor/welle.io/src/input")
-        .std("c++17");
+        .std("gnu++17");
 
     // Homebrew's fftw formula installs fftw3.h/libfftw3f into the Homebrew
     // prefix's include/lib dirs, but those aren't on clang's default search

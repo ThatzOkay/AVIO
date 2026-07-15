@@ -14,9 +14,8 @@
       {
         "title": "avio",
         "decorations": false,
-        "resizable": false,
-        "fullscreen": true,
-        "visible": false
+        "resizable": true,
+        "fullscreen": true
       }
     ],
     "security": {

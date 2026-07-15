@@ -4,14 +4,12 @@
        v-app background isn't transparent, which would hide the video underneath it). -->
   <RouterView v-if="isTouchWindow" />
   <v-app v-else>
-    <v-navigation-drawer
+    <!-- <v-bottom-navigation
       v-if="!androidAutoActive"
       permanent
-      rail
-      rail-width="64"
-      class="d-flex flex-column"
+      class="d-flex flex-row fill-width"
     >
-      <div class="d-flex flex-column fill-height">
+      <div class="d-flex flex-row fill-width">
         <div>
           <v-list-item
             :title="time"
@@ -19,7 +17,7 @@
           />
           <v-divider />
         </div>
-        <div class="d-flex flex-column justify-space-between flex-grow-1 mt-2 mb-2">
+        <div class="d-flex flex-row justify-space-between flex-grow-1 mt-2 mb-2">
           <v-list-item
             link
             prepend-icon="mdi-phone"
@@ -44,31 +42,35 @@
           />
         </div>
       </div>
-    </v-navigation-drawer>
+    </v-bottom-navigation> -->
+    <TopBar v-if="!androidAutoActive" />
     <v-main>
       <RouterView />
     </v-main>
+    <BottomBar v-if="!androidAutoActive" />
   </v-app>
 </template>
 
 <script setup lang="ts">
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { computed, onBeforeMount, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useStatusStore } from './store/statusStore';
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { computed, onBeforeMount, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useStatusStore } from "./store/statusStore";
+import BottomBar from "./components/BottomBar.vue";
+import TopBar from "./components/TopBar.vue";
 
 const statusStore = useStatusStore();
 const router = useRouter();
 const route = useRoute();
-const time = ref('')
+const time = ref("");
 
-const isTouchWindow = getCurrentWindow().label === 'aa-touch';
+const isTouchWindow = getCurrentWindow().label === "aa-touch";
 
 // Hidden only while actively projecting video. "host-ui" (phone kicked back to its home
 // screen) shows the sidebar again alongside the resume button.
-const androidAutoActive = computed(() => statusStore.aaStatus === 'connected');
+const androidAutoActive = computed(() => statusStore.aaStatus === "connected");
 
 const setDate = () => {
   const now = new Date();
@@ -77,20 +79,22 @@ const setDate = () => {
 
   const hour = now.getHours();
 
-  time.value = `${hour.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-}
+  time.value = `${hour.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+};
 
 onBeforeMount(async () => {
   setDate();
   const rtlSdrDetected = await invoke<boolean>("plugin:rtl-sdr|detect_rtl_sdr");
   statusStore.setRtlSdrDetected(rtlSdrDetected);
 
-  listen('usb-event', async () => {
-    const rtlSdrDetected = await invoke<boolean>("plugin:rtl-sdr|detect_rtl_sdr");
+  listen("usb-event", async () => {
+    const rtlSdrDetected = await invoke<boolean>(
+      "plugin:rtl-sdr|detect_rtl_sdr",
+    );
     statusStore.setRtlSdrDetected(rtlSdrDetected);
   });
 
-  listen<'disconnected' | 'connected' | 'host-ui'>('aa-status', (event) => {
+  listen<"disconnected" | "connected" | "host-ui">("aa-status", (event) => {
     statusStore.setAaStatus(event.payload);
   });
 });

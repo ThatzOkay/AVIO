@@ -10,9 +10,12 @@
     "tauri": "tauri",
     "typecheck": "vue-tsc --noEmit",
     "lint:check": "biome ci .",
-    "lint:vue": "eslint . --max-warnings=0"
+    "lint:vue": "eslint . --max-warnings=0",
+    "format:vue": "prettier --write \"src/**/*.vue\"",
+    "lint:fix": "biome check . --write && bun run format:vue"
   },
   "dependencies": {
+    "@material/material-color-utilities": "^0.4.0",
     "@mdi/font": "^7.4.47",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2",
@@ -28,8 +31,10 @@
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^6.0.7",
     "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.9.2",
     "globals": "^17.7.0",
+    "prettier": "^3.9.5",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.64.0",
     "vite": "^8.0.16",
