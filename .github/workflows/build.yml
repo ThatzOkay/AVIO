@@ -141,7 +141,18 @@ jobs:
         with:
           msystem: MINGW64
           path-type: inherit
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2 perl
+
+      # openssl-sys's vendored build (avio depends on openssl with the
+      # "vendored" feature) shells out to `perl ./Configure`. The runner's
+      # preinstalled Strawberry Perl reports MSWin32 with backslash paths,
+      # which OpenSSL's Configure rejects outright for a mingw64 target - it
+      # needs MSYS2's own POSIX-style perl instead, pointed to explicitly so
+      # it wins regardless of PATH ordering.
+      - name: Point PERL at MSYS2's perl [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: '"PERL=C:\msys64\usr\bin\perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8'
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
