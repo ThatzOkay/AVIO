@@ -161,6 +161,25 @@ jobs:
           # process spawn (Configure) and the later shell-embedded use (make).
           "PERL=C:/msys64/usr/bin/perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      # cc-rs (used by welle-io-sys's cxx_build script, and any other -sys
+      # crate's C/C++ compilation) resolves a bare "gcc"/"g++" off PATH, which
+      # here also finds the runner's preinstalled Strawberry Perl's bundled
+      # MinGW compiler ahead of MSYS2's - same PATH-shadowing issue as PERL
+      # above. That compiler has no fftw3 headers (those were pacman-installed
+      # into MSYS2's own mingw64 prefix), so welle.io's fft.h fails with
+      # "fftw3.h: No such file or directory". Pin cc-rs's target-specific
+      # override vars (the exact names cc-rs itself reports, e.g.
+      # CXXFLAGS_x86_64-pc-windows-gnu) to MSYS2's mingw64 compilers so the
+      # right one is used regardless of PATH ordering.
+      - name: Point CC/CXX at MSYS2's mingw64 toolchain [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          @(
+            "CC_x86_64-pc-windows-gnu=C:/msys64/mingw64/bin/gcc.exe"
+            "CXX_x86_64-pc-windows-gnu=C:/msys64/mingw64/bin/g++.exe"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
         shell: pwsh
