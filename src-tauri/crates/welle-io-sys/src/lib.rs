@@ -59,6 +59,9 @@ fn device_cmd_tx() -> &'static std_mpsc::Sender<DeviceCmd> {
 #[allow(dead_code)]
 fn device_worker_loop(rx: std_mpsc::Receiver<DeviceCmd>) {
     //let mut dev: Option<ffi::UniquePtr<ffi::WelleIoBridge>> = None;
+    // DeviceCmd has no variants yet - the empty match makes clippy think the
+    // loop can't iterate. Will go away once DAB commands are added below.
+    #[allow(clippy::never_loop)]
     while let Ok(cmd) = rx.recv() {
         match cmd {
         }
