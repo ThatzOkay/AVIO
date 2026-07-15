@@ -144,41 +144,29 @@ jobs:
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2 perl
 
       # openssl-sys's vendored build (avio depends on openssl with the
-      # "vendored" feature) shells out to `perl ./Configure`. The runner's
-      # preinstalled Strawberry Perl reports MSWin32 with backslash paths,
-      # which OpenSSL's Configure rejects outright for a mingw64 target - it
-      # needs MSYS2's own POSIX-style perl instead, pointed to explicitly so
-      # it wins regardless of PATH ordering.
-      - name: Point PERL at MSYS2's perl [windows]
+      # "vendored" feature) shells out to `perl ./Configure`, and cc-rs (used
+      # by welle-io-sys's cxx_build script and any other -sys crate) resolves
+      # a bare "gcc"/"g++" off PATH - both find the runner's preinstalled
+      # Strawberry Perl (own POSIX-hostile perl, own bundled MinGW compiler
+      # with no fftw3 headers) ahead of MSYS2's on PATH. Pin all three
+      # explicitly so the MSYS2 ones win regardless of PATH ordering:
+      # PERL for OpenSSL's Configure (Strawberry's perl reports MSWin32 with
+      # backslash paths, which Configure rejects for a mingw64 target), and
+      # cc-rs's target-specific CC/CXX override vars (exact names cc-rs
+      # itself reports, e.g. CXXFLAGS_x86_64-pc-windows-gnu) for the compiler.
+      # Resolved via `cygpath -m` from inside the MSYS2 shell itself rather
+      # than hardcoding an install root (e.g. C:\msys64) - that guess doesn't
+      # hold on every runner image, and cygpath -m already returns the
+      # forward-slash form both OpenSSL's Configure/make and cc-rs need (a
+      # backslash-heavy path's backslashes get eaten when Configure's output
+      # is later invoked through an msys bash recipe line in `make depend`).
+      - name: Resolve MSYS2 mingw64 toolchain paths [windows]
         if: matrix.os == 'windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          # OpenSSL's Configure bakes whatever path we pass here verbatim into
-          # the generated Makefile's $(PERL) variable, which `make depend` later
-          # invokes through an msys bash recipe line - a backslash-heavy Windows
-          # path gets its backslashes eaten there (unquoted shell escaping), so
-          # this has to be forward-slash form to survive both the direct Rust
-          # process spawn (Configure) and the later shell-embedded use (make).
-          "PERL=C:/msys64/usr/bin/perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      # cc-rs (used by welle-io-sys's cxx_build script, and any other -sys
-      # crate's C/C++ compilation) resolves a bare "gcc"/"g++" off PATH, which
-      # here also finds the runner's preinstalled Strawberry Perl's bundled
-      # MinGW compiler ahead of MSYS2's - same PATH-shadowing issue as PERL
-      # above. That compiler has no fftw3 headers (those were pacman-installed
-      # into MSYS2's own mingw64 prefix), so welle.io's fft.h fails with
-      # "fftw3.h: No such file or directory". Pin cc-rs's target-specific
-      # override vars (the exact names cc-rs itself reports, e.g.
-      # CXXFLAGS_x86_64-pc-windows-gnu) to MSYS2's mingw64 compilers so the
-      # right one is used regardless of PATH ordering.
-      - name: Point CC/CXX at MSYS2's mingw64 toolchain [windows]
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          @(
-            "CC_x86_64-pc-windows-gnu=C:/msys64/mingw64/bin/gcc.exe"
-            "CXX_x86_64-pc-windows-gnu=C:/msys64/mingw64/bin/g++.exe"
-          ) | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "PERL=$(cygpath -m /usr/bin/perl.exe)" >> "$GITHUB_ENV"
+          echo "CC_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/gcc.exe)" >> "$GITHUB_ENV"
+          echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/g++.exe)" >> "$GITHUB_ENV"
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
