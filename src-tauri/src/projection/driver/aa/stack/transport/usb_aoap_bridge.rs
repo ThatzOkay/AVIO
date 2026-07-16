@@ -204,11 +204,7 @@ async fn switch_and_wait_for_accessory(phone: &DeviceInfo) -> Result<DeviceInfo,
     drop(device); // release before the phone disconnects and re-enumerates
     handshake_result.map_err(BridgeError::Handshake)?;
 
-    wait_for_accessory_attach(
-        watcher,
-        Duration::from_millis(AOAP_RE_ENUMERATE_TIMEOUT_MS),
-    )
-    .await
+    wait_for_accessory_attach(watcher, Duration::from_millis(AOAP_RE_ENUMERATE_TIMEOUT_MS)).await
 }
 
 async fn wait_for_accessory_attach(

@@ -4,14 +4,12 @@ use evno::Bus;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
-use crate::{
-    radio::radio_service::RadioService,
-    usb::usb_service::{UsbService},
-};
+use crate::{radio::radio_service::RadioService, usb::usb_service::UsbService};
 
 pub mod audio;
 pub mod projection;
 pub mod radio;
+pub mod screen;
 pub mod shared;
 pub mod usb;
 pub mod video;
@@ -35,6 +33,7 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
@@ -63,22 +62,21 @@ pub fn run() {
 
             let radio_service_init = radio_service.clone();
             tauri::async_runtime::spawn(async move {
+                println!("Initializing radio service");
                 let mut radio = radio_service_init.lock().await;
                 radio.init();
             });
-            let main_settled = Arc::new(tokio::sync::Notify::new());
 
             let app_for_udev = app_handle.clone();
-            let main_settled_for_usb = main_settled.clone();
             tauri::async_runtime::spawn(async move {
+                println!("Checking and installing udev rule for USB devices");
                 usb::udev_rule::check_and_install_udev_rule(&app_for_udev).await;
-                main_settled_for_usb.notified().await;
 
                 let mut service = usb_service.lock().await;
                 service.init().await;
+                println!("USB service initialized");
                 UsbService::start(usb_service.clone());
             });
-
 
             Ok(())
         })
@@ -87,6 +85,11 @@ pub fn run() {
             greet,
             audio::list_sinks,
             audio::list_sources,
+            audio::get_current_volume,
+            audio::get_default_device_name,
+            audio::set_current_volume,
+            screen::get_current_brightness,
+            screen::set_brightness,
             radio::start,
             radio::stop,
             radio::get_fm_state,

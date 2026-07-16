@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    path::PathBuf,
-    sync::Mutex,
-};
+use std::{collections::HashSet, path::PathBuf, sync::Mutex};
 
 use regex::Regex;
 use tauri::{path::BaseDirectory, AppHandle, Manager};
@@ -13,7 +9,9 @@ const RULE_FILE: &str = "/etc/udev/rules.d/99-AVIO.rules";
 
 const TEMPLATE_FILENAME: &str = "99-AVIO.rules.template";
 
-fn resolve_template_path(app: tauri::AppHandle) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+fn resolve_template_path(
+    app: tauri::AppHandle,
+) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let base = app.path().resolve("assets", BaseDirectory::Resource);
     if base.is_err() {
         return Err(Box::new(std::io::Error::new(
@@ -29,7 +27,9 @@ fn resolve_template_path(app: tauri::AppHandle) -> Result<PathBuf, Box<dyn std::
 
 static CACHED_PHONE_VENDOR_IDS: Mutex<Option<HashSet<u16>>> = Mutex::new(None);
 
-fn load_template(app: tauri::AppHandle) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+fn load_template(
+    app: tauri::AppHandle,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let template_path = resolve_template_path(app)?;
     let template_content = std::fs::read_to_string(template_path)?;
     Ok(template_content)
@@ -149,9 +149,10 @@ async fn install_rule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error +
 
     let code = proc.wait()?.code().unwrap_or(-1);
     if code != 0 {
-        return Err(Box::new(std::io::Error::other(
-            format!("pkexec command failed with exit code {}", code),
-        )));
+        return Err(Box::new(std::io::Error::other(format!(
+            "pkexec command failed with exit code {}",
+            code
+        ))));
     }
 
     Ok(())

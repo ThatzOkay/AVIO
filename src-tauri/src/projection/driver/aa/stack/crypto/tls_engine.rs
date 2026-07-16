@@ -29,7 +29,10 @@ struct MemStream {
 impl Read for MemStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.incoming.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::WouldBlock, "no ciphertext buffered"));
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "no ciphertext buffered",
+            ));
         }
         let n = buf.len().min(self.incoming.len());
         for slot in buf.iter_mut().take(n) {
@@ -116,19 +119,23 @@ impl TlsEngine {
                     Ok(mut stream) => {
                         let outbound = std::mem::take(&mut stream.get_mut().outgoing);
                         self.state = State::Connected(stream);
-                        Ok(TlsFeedResult { plaintext: Vec::new(), outbound })
+                        Ok(TlsFeedResult {
+                            plaintext: Vec::new(),
+                            outbound,
+                        })
                     }
                     Err(HandshakeError::WouldBlock(mut mid)) => {
                         let outbound = std::mem::take(&mut mid.get_mut().outgoing);
                         self.state = State::Handshaking(mid);
-                        Ok(TlsFeedResult { plaintext: Vec::new(), outbound })
+                        Ok(TlsFeedResult {
+                            plaintext: Vec::new(),
+                            outbound,
+                        })
                     }
                     Err(HandshakeError::Failure(mid)) => {
                         Err(io::Error::other(mid.error().to_string()))
                     }
-                    Err(HandshakeError::SetupFailure(e)) => {
-                        Err(io::Error::other(e.to_string()))
-                    }
+                    Err(HandshakeError::SetupFailure(e)) => Err(io::Error::other(e.to_string())),
                 }
             }
             State::Connected(mut stream) => {
@@ -136,7 +143,10 @@ impl TlsEngine {
                 let plaintext = drain_plaintext(&mut stream);
                 let outbound = std::mem::take(&mut stream.get_mut().outgoing);
                 self.state = State::Connected(stream);
-                Ok(TlsFeedResult { plaintext, outbound })
+                Ok(TlsFeedResult {
+                    plaintext,
+                    outbound,
+                })
             }
             State::Failed => Err(io::Error::other("TLS handshake previously failed")),
         }

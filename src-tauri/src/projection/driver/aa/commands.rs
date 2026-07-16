@@ -32,14 +32,23 @@ pub async fn aa_send_touch(
     let px = (x.clamp(0.0, 1.0) * TOUCH_W).round() as u32;
     let py = (y.clamp(0.0, 1.0) * TOUCH_H).round() as u32;
     println!("[AA touch] sending {action:?} at {px},{py} (norm {x:.3},{y:.3})");
-    handle.send(SessionCommand::Touch { action, x: px, y: py }).await;
+    handle
+        .send(SessionCommand::Touch {
+            action,
+            x: px,
+            y: py,
+        })
+        .await;
     Ok(())
 }
 
 /// Resumes projected AA content after the phone kicked the display back to its native/host UI
 /// (see the "aa-status" event with payload "host-ui").
 #[tauri::command]
-pub async fn aa_resume(app: AppHandle, handle: State<'_, Arc<AaSessionHandle>>) -> Result<(), String> {
+pub async fn aa_resume(
+    app: AppHandle,
+    handle: State<'_, Arc<AaSessionHandle>>,
+) -> Result<(), String> {
     // Eagerly reopen the touch overlay right on click rather than only reacting to the next AA
     // video frame — the phone resuming projection depends on it actually receiving and honoring
     // our RequestVideoFocus, which isn't guaranteed, so the touch surface shouldn't be stuck
@@ -48,7 +57,10 @@ pub async fn aa_resume(app: AppHandle, handle: State<'_, Arc<AaSessionHandle>>) 
         let _ = w.show();
         let _ = w.set_focus();
     });
-    println!("[AA resume] ensure_touch_window: {}", touch_result.is_some());
+    println!(
+        "[AA resume] ensure_touch_window: {}",
+        touch_result.is_some()
+    );
 
     let reached_session = handle.send(SessionCommand::RequestVideoFocus).await;
     println!("[AA resume] RequestVideoFocus sent, reached a live session: {reached_session}");

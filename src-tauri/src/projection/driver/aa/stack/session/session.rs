@@ -16,7 +16,9 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time;
 
-use aa_proto::aap_protobuf::service::bluetooth::message::{BluetoothPairingRequest, BluetoothPairingResponse};
+use aa_proto::aap_protobuf::service::bluetooth::message::{
+    BluetoothPairingRequest, BluetoothPairingResponse,
+};
 use aa_proto::aap_protobuf::service::control::message::{
     AuthResponse, ChannelOpenResponse, PingRequest,
 };
@@ -29,7 +31,9 @@ use super::super::channels::media_info_channel::{self, MediaInfoEvent};
 use super::super::channels::mic_channel::{MicChannel, MicEvent};
 use super::super::channels::navigation_channel::{self, NavEvent};
 use super::super::channels::video_channel::{VideoChannel, VideoEvent};
-use super::super::constants::{av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version, STATUS_OK};
+use super::super::constants::{
+    av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version, STATUS_OK,
+};
 use super::super::crypto::tls_engine::TlsEngine;
 use super::super::frame::codec::{encode_frame, FrameParser, RawFrame};
 use super::config::{SessionConfig, VideoCodec};
@@ -55,7 +59,12 @@ pub enum SessionEvent {
     Error(String),
     /// Encoded video access unit ready for the decoder. `channel_id` is `ch::VIDEO` or
     /// `ch::CLUSTER_VIDEO`; `codec` is whichever of H264/H265/VP9/AV1 was negotiated for it.
-    VideoFrame { channel_id: u8, codec: VideoCodec, data: Vec<u8>, timestamp_ns: u64 },
+    VideoFrame {
+        channel_id: u8,
+        codec: VideoCodec,
+        data: Vec<u8>,
+        timestamp_ns: u64,
+    },
     /// Negotiated once per SDR: the video tier's full encoded size plus the actual AA content
     /// region within it (crop out the phone's own letterbox bars, scale the rest to fill the
     /// screen — see `GstVideo::set_content_region`).
@@ -70,9 +79,17 @@ pub enum SessionEvent {
     HostUiRequested,
     /// PCM/AAC-LC audio from the phone. `channel_id` is one of `ch::MEDIA_AUDIO`,
     /// `ch::SPEECH_AUDIO`, `ch::SYSTEM_AUDIO`.
-    AudioFrame { channel_id: u8, data: Vec<u8>, timestamp_ns: u64 },
-    AudioStart { channel_id: u8 },
-    AudioStop { channel_id: u8 },
+    AudioFrame {
+        channel_id: u8,
+        data: Vec<u8>,
+        timestamp_ns: u64,
+    },
+    AudioStart {
+        channel_id: u8,
+    },
+    AudioStop {
+        channel_id: u8,
+    },
     /// Phone asked the HU to begin/stop sending mic PCM (see `Session::push_mic_pcm`).
     MicStart,
     MicStop,
@@ -93,7 +110,11 @@ pub enum SessionCommand {
     /// Single-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
     Touch { action: u32, x: u32, y: u32 },
     /// HW button/key event (see `Session::send_button`).
-    Button { key_codes: Vec<u32>, down: bool, longpress: bool },
+    Button {
+        key_codes: Vec<u32>,
+        down: bool,
+        longpress: bool,
+    },
     /// Rotary-encoder delta event (see `Session::send_rotary`).
     Rotary { direction: i32 },
     /// Resume projected AA content after the phone requested the host UI (see
@@ -145,9 +166,18 @@ impl Session {
             video: VideoChannel::new(ch::VIDEO),
             cluster: VideoChannel::new(ch::CLUSTER_VIDEO),
             audio: HashMap::from([
-                (ch::MEDIA_AUDIO, AudioChannel::new(ch::MEDIA_AUDIO, AudioChannelType::Media)),
-                (ch::SPEECH_AUDIO, AudioChannel::new(ch::SPEECH_AUDIO, AudioChannelType::Speech)),
-                (ch::SYSTEM_AUDIO, AudioChannel::new(ch::SYSTEM_AUDIO, AudioChannelType::System)),
+                (
+                    ch::MEDIA_AUDIO,
+                    AudioChannel::new(ch::MEDIA_AUDIO, AudioChannelType::Media),
+                ),
+                (
+                    ch::SPEECH_AUDIO,
+                    AudioChannel::new(ch::SPEECH_AUDIO, AudioChannelType::Speech),
+                ),
+                (
+                    ch::SYSTEM_AUDIO,
+                    AudioChannel::new(ch::SYSTEM_AUDIO, AudioChannelType::System),
+                ),
             ]),
             mic: MicChannel::new(ch::MIC_INPUT),
             video_codec_by_index: Vec::new(),
@@ -281,8 +311,13 @@ impl Session {
             _ => {
                 // An encrypted frame piggy-backed on the same TCP segment as TLS Finished.
                 if self.tls.is_some() && frame.flags & 0x08 != 0 {
-                    self.on_encrypted_frame(frame.channel_id, frame.flags, &frame.raw_payload, events)
-                        .await
+                    self.on_encrypted_frame(
+                        frame.channel_id,
+                        frame.flags,
+                        &frame.raw_payload,
+                        events,
+                    )
+                    .await
                 } else {
                     Ok(())
                 }
@@ -328,14 +363,24 @@ impl Session {
     async fn on_secure_connect(&mut self) -> std::io::Result<()> {
         self.state = SessionState::Auth;
         let auth_buf = AuthResponse { status: STATUS_OK }.encode_to_vec();
-        self.send_aa(ch::CONTROL, frame_flags::PLAINTEXT, ctrl_msg::AUTH_COMPLETE, &auth_buf)
-            .await?;
+        self.send_aa(
+            ch::CONTROL,
+            frame_flags::PLAINTEXT,
+            ctrl_msg::AUTH_COMPLETE,
+            &auth_buf,
+        )
+        .await?;
         self.state = SessionState::ServiceDiscovery;
         Ok(())
     }
 
     async fn send_handshake_bytes(&mut self, bytes: &[u8]) -> std::io::Result<()> {
-        let frame = encode_frame(ch::CONTROL, frame_flags::PLAINTEXT, ctrl_msg::SSL_HANDSHAKE, bytes);
+        let frame = encode_frame(
+            ch::CONTROL,
+            frame_flags::PLAINTEXT,
+            ctrl_msg::SSL_HANDSHAKE,
+            bytes,
+        );
         self.socket.write_all(&frame).await
     }
 
@@ -383,7 +428,8 @@ impl Session {
                 continue;
             }
 
-            self.on_encrypted_frame(channel_id, flags, &raw_payload, events).await?;
+            self.on_encrypted_frame(channel_id, flags, &raw_payload, events)
+                .await?;
         }
         Ok(())
     }
@@ -428,7 +474,10 @@ impl Session {
         }
 
         if is_first && !is_last {
-            println!("[Session] fragment START ch={channel_id} first_chunk_len={}", result.plaintext.len());
+            println!(
+                "[Session] fragment START ch={channel_id} first_chunk_len={}",
+                result.plaintext.len()
+            );
             self.cleartext_fragments.insert(
                 channel_id,
                 CleartextFragment {
@@ -446,8 +495,14 @@ impl Session {
         state.parts.extend_from_slice(&result.plaintext);
 
         if is_last {
-            let state = self.cleartext_fragments.remove(&channel_id).expect("checked above");
-            println!("[Session] fragment END ch={channel_id} total_len={}", state.parts.len());
+            let state = self
+                .cleartext_fragments
+                .remove(&channel_id)
+                .expect("checked above");
+            println!(
+                "[Session] fragment END ch={channel_id} total_len={}",
+                state.parts.len()
+            );
             if state.parts.len() < 2 {
                 return Ok(());
             }
@@ -486,28 +541,44 @@ impl Session {
         if msg_id == ctrl_msg::CHANNEL_OPEN_REQUEST {
             let buf = ChannelOpenResponse { status: STATUS_OK }.encode_to_vec();
             return self
-                .send_aa(channel_id, frame_flags::ENC_CONTROL, ctrl_msg::CHANNEL_OPEN_RESPONSE, &buf)
+                .send_aa(
+                    channel_id,
+                    frame_flags::ENC_CONTROL,
+                    ctrl_msg::CHANNEL_OPEN_RESPONSE,
+                    &buf,
+                )
                 .await;
         }
 
         if msg_id == av_msg::SETUP_REQUEST {
-            return self.handle_av_setup_request(channel_id, payload, events).await;
+            return self
+                .handle_av_setup_request(channel_id, payload, events)
+                .await;
         }
 
         if channel_id == ch::VIDEO || channel_id == ch::CLUSTER_VIDEO {
-            return self.handle_video_message(channel_id, msg_id, payload, events).await;
+            return self
+                .handle_video_message(channel_id, msg_id, payload, events)
+                .await;
         }
 
         // Phone sends a list of keycodes it wants the HU to bind for input dispatch.
         if channel_id == ch::INPUT && msg_id == input_channel::input_msg::KEY_BINDING_REQUEST {
             // KeyBindingResponse: required int32 status = 1; varint tag 0x08, value 0 (OK).
             return self
-                .send_aa(ch::INPUT, frame_flags::ENC_SIGNAL, input_channel::input_msg::KEY_BINDING_RESPONSE, &[0x08, 0x00])
+                .send_aa(
+                    ch::INPUT,
+                    frame_flags::ENC_SIGNAL,
+                    input_channel::input_msg::KEY_BINDING_RESPONSE,
+                    &[0x08, 0x00],
+                )
                 .await;
         }
 
         if self.audio.contains_key(&channel_id) {
-            return self.handle_audio_message(channel_id, msg_id, payload, events).await;
+            return self
+                .handle_audio_message(channel_id, msg_id, payload, events)
+                .await;
         }
 
         if channel_id == ch::MIC_INPUT {
@@ -567,23 +638,39 @@ impl Session {
         }
 
         // SensorRequest: field 1 (varint) = SensorType.
-        let sensor_type = if payload.len() >= 2 && payload[0] == 0x08 { payload[1] } else { 0 };
+        let sensor_type = if payload.len() >= 2 && payload[0] == 0x08 {
+            payload[1]
+        } else {
+            0
+        };
 
         // SensorStartResponse: status=SUCCESS(0). msgId 0x8002 = SENSOR_MESSAGE_RESPONSE.
-        self.send_aa(ch::SENSOR, frame_flags::ENC_SIGNAL, 0x8002, &[0x08, 0x00]).await?;
+        self.send_aa(ch::SENSOR, frame_flags::ENC_SIGNAL, 0x8002, &[0x08, 0x00])
+            .await?;
 
         // SensorBatch (msgId 0x8003) — emit an initial value for the types that need one to
         // avoid the phone treating the sensor as stuck at an unknown state.
         match sensor_type {
             13 => {
                 // DrivingStatus = UNRESTRICTED(0)
-                self.send_aa(ch::SENSOR, frame_flags::ENC_SIGNAL, 0x8003, &[0x6a, 0x02, 0x08, 0x00]).await?;
+                self.send_aa(
+                    ch::SENSOR,
+                    frame_flags::ENC_SIGNAL,
+                    0x8003,
+                    &[0x6a, 0x02, 0x08, 0x00],
+                )
+                .await?;
             }
             10 => {
                 // NightMode
                 let initial = self.cfg.initial_night_mode;
-                self.send_aa(ch::SENSOR, frame_flags::ENC_SIGNAL, 0x8003, &[0x52, 0x02, 0x08, initial as u8])
-                    .await?;
+                self.send_aa(
+                    ch::SENSOR,
+                    frame_flags::ENC_SIGNAL,
+                    0x8003,
+                    &[0x52, 0x02, 0x08, initial as u8],
+                )
+                .await?;
             }
             _ => {}
         }
@@ -594,7 +681,11 @@ impl Session {
     /// Bluetooth. There's no Bluetooth stack wired in yet (that's the separate aa-bluetooth.py
     /// supervisor, not started), so decline honestly rather than claim a pairing that didn't
     /// happen.
-    async fn handle_bluetooth_message(&mut self, msg_id: u16, payload: &[u8]) -> std::io::Result<()> {
+    async fn handle_bluetooth_message(
+        &mut self,
+        msg_id: u16,
+        payload: &[u8],
+    ) -> std::io::Result<()> {
         if msg_id != 0x8001 {
             return Ok(());
         }
@@ -608,7 +699,13 @@ impl Session {
             status: MessageStatus::StatusBluetoothUnavailable as i32,
             already_paired: false,
         };
-        self.send_aa(ch::BLUETOOTH, frame_flags::ENC_SIGNAL, 0x8002, &resp.encode_to_vec()).await
+        self.send_aa(
+            ch::BLUETOOTH,
+            frame_flags::ENC_SIGNAL,
+            0x8002,
+            &resp.encode_to_vec(),
+        )
+        .await
     }
 
     async fn handle_video_message(
@@ -631,9 +728,18 @@ impl Session {
 
         match event {
             VideoEvent::Frame { data, timestamp_ns } => {
-                let codec = if channel_id == ch::VIDEO { self.video_codec } else { self.cluster_codec }
-                    .unwrap_or(VideoCodec::H264);
-                let _ = events.send(SessionEvent::VideoFrame { channel_id, codec, data, timestamp_ns });
+                let codec = if channel_id == ch::VIDEO {
+                    self.video_codec
+                } else {
+                    self.cluster_codec
+                }
+                .unwrap_or(VideoCodec::H264);
+                let _ = events.send(SessionEvent::VideoFrame {
+                    channel_id,
+                    codec,
+                    data,
+                    timestamp_ns,
+                });
             }
             VideoEvent::HostUiRequested => {
                 let _ = events.send(SessionEvent::HostUiRequested);
@@ -663,7 +769,11 @@ impl Session {
 
         match event {
             AudioEvent::Pcm { data, timestamp_ns } => {
-                let _ = events.send(SessionEvent::AudioFrame { channel_id, data, timestamp_ns });
+                let _ = events.send(SessionEvent::AudioFrame {
+                    channel_id,
+                    data,
+                    timestamp_ns,
+                });
             }
             AudioEvent::Start => {
                 let _ = events.send(SessionEvent::AudioStart { channel_id });
@@ -770,7 +880,11 @@ impl Session {
         });
 
         if let Some(audio) = self.audio.get_mut(&channel_id) {
-            let (rate, channels) = if channel_id == ch::MEDIA_AUDIO { (48000, 2) } else { (16000, 1) };
+            let (rate, channels) = if channel_id == ch::MEDIA_AUDIO {
+                (48000, 2)
+            } else {
+                (16000, 1)
+            };
             audio.handle_setup_request(rate, channels);
         } else if channel_id == ch::MIC_INPUT {
             self.mic.handle_setup_request(16000, 1);
@@ -786,11 +900,18 @@ impl Session {
                 c if c == media_codec::VIDEO_AV1 => VideoCodec::Av1,
                 _ => VideoCodec::H264,
             };
-            let offered = if channel_id == ch::VIDEO { &self.video_codec_by_index } else { &self.cluster_codec_by_index };
+            let offered = if channel_id == ch::VIDEO {
+                &self.video_codec_by_index
+            } else {
+                &self.cluster_codec_by_index
+            };
             if let Some(idx) = offered.iter().position(|c| *c == want) {
                 config_idx = idx as u32;
             }
-            let chosen = offered.get(config_idx as usize).copied().unwrap_or(VideoCodec::H264);
+            let chosen = offered
+                .get(config_idx as usize)
+                .copied()
+                .unwrap_or(VideoCodec::H264);
             if channel_id == ch::VIDEO {
                 self.video_codec = Some(chosen);
             } else {
@@ -803,13 +924,23 @@ impl Session {
             max_unacked: Some(1),
             configs: vec![config_idx],
         };
-        self.send_aa(channel_id, frame_flags::ENC_SIGNAL, av_msg::SETUP_RESPONSE, &resp.encode_to_vec())
-            .await?;
+        self.send_aa(
+            channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::SETUP_RESPONSE,
+            &resp.encode_to_vec(),
+        )
+        .await?;
 
         if channel_id == ch::VIDEO {
             // VideoFocusIndication(PROJECTED, unsolicited=false) — keyframe request.
-            self.send_aa(ch::VIDEO, frame_flags::ENC_SIGNAL, av_msg::VIDEO_FOCUS_INDICATION, &[0x08, 0x01])
-                .await?;
+            self.send_aa(
+                ch::VIDEO,
+                frame_flags::ENC_SIGNAL,
+                av_msg::VIDEO_FOCUS_INDICATION,
+                &[0x08, 0x01],
+            )
+            .await?;
             // No AVChannelStartIndication — phone sends START_INDICATION when ready.
             self.state = SessionState::Running;
             let _ = events.send(SessionEvent::Connected);
@@ -823,7 +954,12 @@ impl Session {
         let mut data = Vec::with_capacity(4);
         data.extend_from_slice(&version::MAJOR.to_be_bytes());
         data.extend_from_slice(&version::MINOR.to_be_bytes());
-        let frame = encode_frame(ch::CONTROL, frame_flags::PLAINTEXT, ctrl_msg::VERSION_REQUEST, &data);
+        let frame = encode_frame(
+            ch::CONTROL,
+            frame_flags::PLAINTEXT,
+            ctrl_msg::VERSION_REQUEST,
+            &data,
+        );
         self.socket.write_all(&frame).await
     }
 
@@ -838,12 +974,24 @@ impl Session {
             data: None,
         }
         .encode_to_vec();
-        self.send_aa(ch::CONTROL, frame_flags::PLAINTEXT, ctrl_msg::PING_REQUEST, &buf).await
+        self.send_aa(
+            ch::CONTROL,
+            frame_flags::PLAINTEXT,
+            ctrl_msg::PING_REQUEST,
+            &buf,
+        )
+        .await
     }
 
     /// Send an AA frame. Encrypted (flags & 0x08) frames are wrapped as one TLS record via the
     /// TLS engine first; plaintext frames go straight to the socket.
-    async fn send_aa(&mut self, channel_id: u8, flags: u8, msg_id: u16, data: &[u8]) -> std::io::Result<()> {
+    async fn send_aa(
+        &mut self,
+        channel_id: u8,
+        flags: u8,
+        msg_id: u16,
+        data: &[u8],
+    ) -> std::io::Result<()> {
         let is_encrypted = flags & 0x08 != 0;
         if !is_encrypted {
             let frame = encode_frame(channel_id, flags, msg_id, data);
@@ -884,20 +1032,35 @@ impl Session {
         let Some(buf) = input_channel::build_touch_report(action, pointers, action_index) else {
             return Ok(());
         };
-        self.send_aa(ch::INPUT, frame_flags::ENC_SIGNAL, input_channel::input_msg::INPUT_REPORT, &buf)
-            .await
+        self.send_aa(
+            ch::INPUT,
+            frame_flags::ENC_SIGNAL,
+            input_channel::input_msg::INPUT_REPORT,
+            &buf,
+        )
+        .await
     }
 
     /// HW button/key event. `key_codes` from `input_channel::button_key::*`.
-    pub async fn send_button(&mut self, key_codes: &[u32], down: bool, longpress: bool) -> std::io::Result<()> {
+    pub async fn send_button(
+        &mut self,
+        key_codes: &[u32],
+        down: bool,
+        longpress: bool,
+    ) -> std::io::Result<()> {
         if self.state != SessionState::Running {
             return Ok(());
         }
         let Some(buf) = input_channel::build_button_report(key_codes, down, longpress) else {
             return Ok(());
         };
-        self.send_aa(ch::INPUT, frame_flags::ENC_SIGNAL, input_channel::input_msg::INPUT_REPORT, &buf)
-            .await
+        self.send_aa(
+            ch::INPUT,
+            frame_flags::ENC_SIGNAL,
+            input_channel::input_msg::INPUT_REPORT,
+            &buf,
+        )
+        .await
     }
 
     /// Rotary-encoder delta event (-1 = previous, +1 = next).
@@ -906,8 +1069,13 @@ impl Session {
             return Ok(());
         }
         let buf = input_channel::build_rotary_report(direction);
-        self.send_aa(ch::INPUT, frame_flags::ENC_SIGNAL, input_channel::input_msg::INPUT_REPORT, &buf)
-            .await
+        self.send_aa(
+            ch::INPUT,
+            frame_flags::ENC_SIGNAL,
+            input_channel::input_msg::INPUT_REPORT,
+            &buf,
+        )
+        .await
     }
 
     /// Push captured mic PCM (s16le, matching the rate/channels negotiated in
@@ -931,11 +1099,19 @@ impl Session {
     /// `SessionEvent::HostUiRequested`). No-op outside `Running`.
     pub async fn request_video_focus(&mut self) -> std::io::Result<()> {
         if self.state != SessionState::Running {
-            println!("[Session] request_video_focus: no-op, state={:?} (not Running)", self.state);
+            println!(
+                "[Session] request_video_focus: no-op, state={:?} (not Running)",
+                self.state
+            );
             return Ok(());
         }
         let result = self
-            .send_aa(ch::VIDEO, frame_flags::ENC_SIGNAL, av_msg::VIDEO_FOCUS_REQUEST, &[0x10, 0x01, 0x18, 0x00])
+            .send_aa(
+                ch::VIDEO,
+                frame_flags::ENC_SIGNAL,
+                av_msg::VIDEO_FOCUS_REQUEST,
+                &[0x10, 0x01, 0x18, 0x00],
+            )
             .await;
         println!("[Session] request_video_focus: sent VIDEO_FOCUS_REQUEST mode=PROJECTED, result={result:?}");
         result

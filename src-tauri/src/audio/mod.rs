@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use cpvc::get_system_volume;
 use regex::Regex;
 use tauri::AppHandle;
 
@@ -80,4 +81,44 @@ pub async fn list_sinks(app: tauri::AppHandle) -> Result<Vec<AudioDevice>, Strin
 #[tauri::command]
 pub async fn list_sources(app: tauri::AppHandle) -> Result<Vec<AudioDevice>, String> {
     mixed_audio_devices(&app, AudioDeviceType::Source).await
+}
+
+#[tauri::command]
+pub fn get_current_volume() -> Result<u8, String> {
+    Ok(get_system_volume())
+}
+
+#[tauri::command]
+pub fn get_default_device_name() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        return cpvc::wasapi::wasapi::get_sound_devices()
+            .map_err(|e| format!("{e:?}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No default device found".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        return cpvc::coreaudio::coreaudio::get_sound_devices()
+            .map_err(|e| format!("{e:?}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No default device found".to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        return cpvc::pulseaudio::pulseaudio::get_sound_devices()
+            .map_err(|e| format!("{e:?}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No default device found".to_string());
+    }
+}
+
+#[tauri::command]
+pub fn set_current_volume(volume: u8) -> Result<bool, String> {
+    Ok(cpvc::set_system_volume(volume))
 }

@@ -132,8 +132,10 @@ impl CompositorControl {
             return;
         }
         let (r, g, b) = hex_to_rgb255(Some(hex));
-        self.state
-            .insert("__backdrop__".to_string(), format!("backdrop {r} {g} {b}\n"));
+        self.state.insert(
+            "__backdrop__".to_string(),
+            format!("backdrop {r} {g} {b}\n"),
+        );
         self.flush().await;
     }
 

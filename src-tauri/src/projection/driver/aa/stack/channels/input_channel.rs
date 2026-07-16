@@ -140,7 +140,11 @@ fn timestamp_micros() -> u64 {
 /// Builds an `InputReport` touch event. `action_index` is the index in `pointers` of the
 /// pointer that triggered `action` — only meaningful for POINTER_DOWN/POINTER_UP, ignored by AA
 /// for plain DOWN/MOVED/UP. Returns `None` if `pointers` is empty (nothing to send).
-pub fn build_touch_report(action: u32, pointers: &[TouchPointer], action_index: u32) -> Option<Vec<u8>> {
+pub fn build_touch_report(
+    action: u32,
+    pointers: &[TouchPointer],
+    action_index: u32,
+) -> Option<Vec<u8>> {
     if pointers.is_empty() {
         return None;
     }

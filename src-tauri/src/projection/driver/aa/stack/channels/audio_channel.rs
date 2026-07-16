@@ -63,7 +63,10 @@ impl AudioChannel {
                 if let Some(start) = decode_start(payload) {
                     self.session = start.session_id;
                 }
-                println!("[AudioChannel ch={}] stream started, session={}", self.channel_id, self.session);
+                println!(
+                    "[AudioChannel ch={}] stream started, session={}",
+                    self.channel_id, self.session
+                );
                 AudioEvent::Start
             }
 
@@ -90,7 +93,12 @@ impl AudioChannel {
         );
     }
 
-    fn on_media_indication(&mut self, payload: &[u8], has_timestamp: bool, send: &mut SendFn) -> AudioEvent {
+    fn on_media_indication(
+        &mut self,
+        payload: &[u8],
+        has_timestamp: bool,
+        send: &mut SendFn,
+    ) -> AudioEvent {
         let (timestamp_ns, data) = if has_timestamp && payload.len() >= 8 {
             let ts = u64::from_be_bytes(payload[0..8].try_into().expect("checked len >= 8"));
             (ts, payload[8..].to_vec())
@@ -109,6 +117,11 @@ impl AudioChannel {
     fn send_ack(&self, send: &mut SendFn) {
         let mut msg = field_varint(1, self.session as i64);
         msg.extend(field_varint(2, 1));
-        send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::AV_MEDIA_ACK, &msg);
+        send(
+            self.channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::AV_MEDIA_ACK,
+            &msg,
+        );
     }
 }

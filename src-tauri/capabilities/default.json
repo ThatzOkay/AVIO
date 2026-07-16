@@ -11,6 +11,7 @@
     "dialog:default",
     "process:default",
     "rtl-sdr:allow-detect-rtl-sdr",
-    "store:default"
+    "store:default",
+    "os:default"
   ]
 }

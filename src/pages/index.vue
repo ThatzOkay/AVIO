@@ -2,6 +2,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useStatusStore } from "../store/statusStore";
 
+definePage({
+  meta: {
+    index: 0,
+  },
+});
+
 const statusStore = useStatusStore();
 
 const resumeAndroidAuto = () => {

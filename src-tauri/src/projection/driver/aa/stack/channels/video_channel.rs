@@ -24,7 +24,10 @@ pub type SendFn<'a> = dyn FnMut(u8, u8, u16, &[u8]) + 'a;
 #[derive(Debug)]
 pub enum VideoEvent {
     /// H.264/H.265 NAL unit, ready for the decoder.
-    Frame { data: Vec<u8>, timestamp_ns: u64 },
+    Frame {
+        data: Vec<u8>,
+        timestamp_ns: u64,
+    },
     /// Phone wants NATIVE/NATIVE_TRANSIENT focus — user wants the host UI.
     HostUiRequested,
     /// Phone confirmed/granted PROJECTED focus.
@@ -64,7 +67,10 @@ impl VideoChannel {
                 if let Some(start) = decode_start(payload) {
                     self.session = start.session_id;
                 }
-                println!("[VideoChannel ch={}] stream started, session={}", self.channel_id, self.session);
+                println!(
+                    "[VideoChannel ch={}] stream started, session={}",
+                    self.channel_id, self.session
+                );
                 VideoEvent::None
             }
 
@@ -82,7 +88,12 @@ impl VideoChannel {
         }
     }
 
-    fn on_media_indication(&mut self, payload: &[u8], has_timestamp: bool, send: &mut SendFn) -> VideoEvent {
+    fn on_media_indication(
+        &mut self,
+        payload: &[u8],
+        has_timestamp: bool,
+        send: &mut SendFn,
+    ) -> VideoEvent {
         let (timestamp_ns, data) = if has_timestamp && payload.len() >= 8 {
             let ts = u64::from_be_bytes(payload[0..8].try_into().expect("checked len >= 8"));
             (ts, payload[8..].to_vec())
@@ -106,7 +117,12 @@ impl VideoChannel {
         //   repeated uint64 receive_timestamp_ns = 3;
         let mut msg = field_varint(1, self.session as i64);
         msg.extend(field_varint(2, 1));
-        send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::AV_MEDIA_ACK, &msg);
+        send(
+            self.channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::AV_MEDIA_ACK,
+            &msg,
+        );
     }
 
     fn on_video_focus_request(&self, payload: &[u8], send: &mut SendFn) -> VideoEvent {
@@ -134,8 +150,16 @@ impl VideoChannel {
         // kept PROJECTED focus when it just asked to relinquish it (e.g. its in-app close button
         // requesting NATIVE) desyncs its focus state from ours, so a later resume request goes
         // ignored since the phone never thought it lost focus in the first place.
-        println!("[VideoChannel ch={}] VideoFocusRequest mode={mode} -> granting", self.channel_id);
-        send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::VIDEO_FOCUS_INDICATION, &[0x08, mode as u8]);
+        println!(
+            "[VideoChannel ch={}] VideoFocusRequest mode={mode} -> granting",
+            self.channel_id
+        );
+        send(
+            self.channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::VIDEO_FOCUS_INDICATION,
+            &[0x08, mode as u8],
+        );
 
         if mode == 2 || mode == 3 {
             VideoEvent::HostUiRequested

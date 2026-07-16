@@ -82,8 +82,7 @@ impl GstHost {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&host_bin, std::fs::Permissions::from_mode(0o755));
 
-        let sock_path =
-            std::env::temp_dir().join(format!("avio-gst-{}.sock", std::process::id()));
+        let sock_path = std::env::temp_dir().join(format!("avio-gst-{}.sock", std::process::id()));
         let crash_path = crash_log_path(app);
         let _ = std::fs::remove_file(&sock_path);
         let _ = std::fs::remove_file(&crash_path);

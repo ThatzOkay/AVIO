@@ -130,7 +130,9 @@ fn prepare_runtime(app: &tauri::AppHandle) {
             };
             std::env::set_var(
                 "GST_PLUGIN_SCANNER",
-                root.join("libexec").join("gstreamer-1.0").join(scanner_name),
+                root.join("libexec")
+                    .join("gstreamer-1.0")
+                    .join(scanner_name),
             );
             if cfg!(windows) {
                 let mut path = std::ffi::OsString::from(root.join("bin"));
@@ -497,9 +499,7 @@ const SAMPLE_H264: &[u8] = include_bytes!("../../media/sample.h264");
 /// independent surface with no relationship to the one actually being driven.
 pub async fn open_gst_test_window(app: tauri::AppHandle) -> Result<(), String> {
     let runtime = app.state::<Arc<VideoRuntime>>().inner().clone();
-    let window = app
-        .get_webview_window("main")
-        .ok_or("no \"main\" window")?;
+    let window = app.get_webview_window("main").ok_or("no \"main\" window")?;
 
     let mut video = GstVideo::new(runtime, window, "gst-test", "main");
 

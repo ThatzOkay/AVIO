@@ -40,7 +40,7 @@ pub mod av_msg {
     // Raw media data (low IDs, no high bit)
     pub const AV_MEDIA_WITH_TIMESTAMP: u16 = 0x0000;
     pub const AV_MEDIA_INDICATION: u16 = 0x0001; // H.264 / PCM frames
-    // Signaling (high bit set = Specific message type)
+                                                 // Signaling (high bit set = Specific message type)
     pub const SETUP_REQUEST: u16 = 0x8000;
     pub const START_INDICATION: u16 = 0x8001;
     pub const STOP_INDICATION: u16 = 0x8002;
@@ -57,12 +57,12 @@ pub mod av_msg {
 pub mod ch {
     pub const CONTROL: u8 = 0;
     pub const SENSOR: u8 = 1; // driving status, GPS, night mode
-    // (2 = MEDIA_SINK group header)
+                              // (2 = MEDIA_SINK group header)
     pub const VIDEO: u8 = 3; // main display H.264/H.265   (MEDIA_SINK_VIDEO)
     pub const MEDIA_AUDIO: u8 = 4; // music / podcast PCM  (MEDIA_SINK_MEDIA_AUDIO)
     pub const SPEECH_AUDIO: u8 = 5; // navigation prompts  (MEDIA_SINK_GUIDANCE_AUDIO)
     pub const SYSTEM_AUDIO: u8 = 6; // system sounds       (MEDIA_SINK_SYSTEM_AUDIO)
-    // (7 = MEDIA_SINK_TELEPHONY_AUDIO)
+                                    // (7 = MEDIA_SINK_TELEPHONY_AUDIO)
     pub const INPUT: u8 = 8; // touch + keycodes (INPUT_SOURCE)
     pub const MIC_INPUT: u8 = 9; // microphone from phone  (MEDIA_SOURCE_MICROPHONE)
     pub const BLUETOOTH: u8 = 10;

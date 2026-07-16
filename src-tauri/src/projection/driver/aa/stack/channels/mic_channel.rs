@@ -92,7 +92,10 @@ impl MicChannel {
         if channel_count > 0 {
             self.channel_count = channel_count;
         }
-        println!("[MicChannel] setup {}Hz {}ch", self.sample_rate, self.channel_count);
+        println!(
+            "[MicChannel] setup {}Hz {}ch",
+            self.sample_rate, self.channel_count
+        );
     }
 
     /// Push a PCM chunk to the phone. Wraps in AV_MEDIA_WITH_TIMESTAMP with the timestamp
@@ -123,7 +126,12 @@ impl MicChannel {
         let mut out = Vec::with_capacity(8 + data.len());
         out.extend_from_slice(&timestamp_ns.to_be_bytes());
         out.extend_from_slice(data);
-        send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::AV_MEDIA_WITH_TIMESTAMP, &out);
+        send(
+            self.channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::AV_MEDIA_WITH_TIMESTAMP,
+            &out,
+        );
         self.unacked += 1;
     }
 
@@ -137,12 +145,20 @@ impl MicChannel {
                 self.max_unacked = decode_varint_value(&f.bytes).max(1);
             }
         }
-        println!("[MicChannel] OPEN_REQUEST open={open} max_unacked={}", self.max_unacked);
+        println!(
+            "[MicChannel] OPEN_REQUEST open={open} max_unacked={}",
+            self.max_unacked
+        );
 
         // MicrophoneResponse: f1 status (0 = OK), f2 session_id
         let mut resp = field_varint(1, 0);
         resp.extend(field_varint(2, self.session as i64));
-        send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::AV_INPUT_OPEN_RESPONSE, &resp);
+        send(
+            self.channel_id,
+            frame_flags::ENC_SIGNAL,
+            av_msg::AV_INPUT_OPEN_RESPONSE,
+            &resp,
+        );
 
         if open && !self.open {
             self.open = true;
@@ -152,7 +168,12 @@ impl MicChannel {
             // HU-sent START_INDICATION on input channels: { session_id, configuration_index=0 }
             let mut start = field_varint(1, self.session as i64);
             start.extend(field_varint(2, 0));
-            send(self.channel_id, frame_flags::ENC_SIGNAL, av_msg::START_INDICATION, &start);
+            send(
+                self.channel_id,
+                frame_flags::ENC_SIGNAL,
+                av_msg::START_INDICATION,
+                &start,
+            );
 
             println!("[MicChannel] mic open, session={}", self.session);
             MicEvent::Start

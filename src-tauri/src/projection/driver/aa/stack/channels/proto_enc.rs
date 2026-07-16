@@ -96,14 +96,22 @@ pub fn decode_fields(payload: &[u8]) -> Vec<ProtoField> {
                 if off + vn > payload.len() {
                     break;
                 }
-                out.push(ProtoField { field, wire, bytes: payload[off..off + vn].to_vec() });
+                out.push(ProtoField {
+                    field,
+                    wire,
+                    bytes: payload[off..off + vn].to_vec(),
+                });
                 off += vn;
             }
             1 => {
                 if off + 8 > payload.len() {
                     break;
                 }
-                out.push(ProtoField { field, wire, bytes: payload[off..off + 8].to_vec() });
+                out.push(ProtoField {
+                    field,
+                    wire,
+                    bytes: payload[off..off + 8].to_vec(),
+                });
                 off += 8;
             }
             2 => {
@@ -113,14 +121,22 @@ pub fn decode_fields(payload: &[u8]) -> Vec<ProtoField> {
                 if off + len > payload.len() {
                     break;
                 }
-                out.push(ProtoField { field, wire, bytes: payload[off..off + len].to_vec() });
+                out.push(ProtoField {
+                    field,
+                    wire,
+                    bytes: payload[off..off + len].to_vec(),
+                });
                 off += len;
             }
             5 => {
                 if off + 4 > payload.len() {
                     break;
                 }
-                out.push(ProtoField { field, wire, bytes: payload[off..off + 4].to_vec() });
+                out.push(ProtoField {
+                    field,
+                    wire,
+                    bytes: payload[off..off + 4].to_vec(),
+                });
                 off += 4;
             }
             _ => break, // groups / unknown
@@ -170,6 +186,9 @@ pub fn decode_start(payload: &[u8]) -> Option<StartMessage> {
     if session_id < 0 {
         None
     } else {
-        Some(StartMessage { session_id, config_index })
+        Some(StartMessage {
+            session_id,
+            config_index,
+        })
     }
 }

@@ -43,7 +43,12 @@ pub enum ControlEvent {
 pub struct ControlChannel;
 
 impl ControlChannel {
-    pub fn handle_message(&mut self, msg_id: u16, payload: &[u8], send: &mut SendFn) -> ControlEvent {
+    pub fn handle_message(
+        &mut self,
+        msg_id: u16,
+        payload: &[u8],
+        send: &mut SendFn,
+    ) -> ControlEvent {
         match msg_id {
             ctrl_msg::SERVICE_DISCOVERY_REQUEST => {
                 let req = ServiceDiscoveryRequest::decode(payload).unwrap_or_default();
@@ -57,7 +62,10 @@ impl ControlChannel {
             ctrl_msg::CHANNEL_OPEN_RESPONSE => {
                 if let Ok(resp) = ChannelOpenResponse::decode(payload) {
                     if resp.status != MessageStatus::StatusSuccess as i32 {
-                        eprintln!("[ControlChannel] ChannelOpenResponse status={}", resp.status);
+                        eprintln!(
+                            "[ControlChannel] ChannelOpenResponse status={}",
+                            resp.status
+                        );
                     }
                 }
                 ControlEvent::None
@@ -145,7 +153,12 @@ impl ControlChannel {
         }
         .encode_to_vec();
         // PING_RESPONSE is plaintext per aasdk EncryptionType for PING_RESPONSE (ch=0, msgId=0x000c).
-        send(ch::CONTROL, frame_flags::PLAINTEXT, ctrl_msg::PING_RESPONSE, &buf);
+        send(
+            ch::CONTROL,
+            frame_flags::PLAINTEXT,
+            ctrl_msg::PING_RESPONSE,
+            &buf,
+        );
     }
 
     fn on_audio_focus_request(&self, payload: &[u8], send: &mut SendFn) {
@@ -180,13 +193,21 @@ impl ControlChannel {
             eprintln!("[ControlChannel] binding request error");
             return;
         };
-        println!("[ControlChannel] BindingRequest scan_codes={:?}", req.scan_codes);
+        println!(
+            "[ControlChannel] BindingRequest scan_codes={:?}",
+            req.scan_codes
+        );
         let buf = BindingResponse {
             status: Some(OaaStatus::Ok as i32),
             already_paired: None,
         }
         .encode_to_vec();
-        send(ch::CONTROL, frame_flags::ENC_SIGNAL, ctrl_msg::BINDING_RESPONSE, &buf);
+        send(
+            ch::CONTROL,
+            frame_flags::ENC_SIGNAL,
+            ctrl_msg::BINDING_RESPONSE,
+            &buf,
+        );
     }
 }
 

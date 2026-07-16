@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use evno::{Bus, Guard, from_fn};
-use serde::{Serialize, Deserialize};
+use evno::{from_fn, Bus, Guard};
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
 use crate::radio::fm_radio_service::{FMRadioService, RadioEvent, StationInfo};
 
-
 const PERSIST_DEBOUNCE_MS: u64 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RadioMode {
     FM,
-    DAB
+    DAB,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +22,7 @@ pub struct RadioState {
     frequency: u32,
     mode: RadioMode,
     station: Option<StationInfo>,
-    favorites: Option<Vec<u32>>
+    favorites: Option<Vec<u32>>,
 }
 
 pub struct RadioService {
@@ -56,7 +55,7 @@ impl RadioService {
             mode: RadioMode::FM,
             fm: FMRadioService::new(app.clone()),
             persist_timer: None,
-            app: app.clone()
+            app: app.clone(),
         }
     }
 
@@ -71,16 +70,20 @@ impl RadioService {
 
         let bus = self.app.state::<Bus>();
 
-        let radio = store.get("radio")
+        let radio = store
+            .get("radio")
             .and_then(|v| serde_json::from_value::<RadioConfig>(v).ok());
 
-        self.mode = radio.clone().unwrap_or(RadioConfig {
-            last_frequency: 0,
-            last_mode: RadioMode::FM,
-            favorites: None,
-            dab_favorites: None,
-            last_dab_station: None
-        }).last_mode;
+        self.mode = radio
+            .clone()
+            .unwrap_or(RadioConfig {
+                last_frequency: 0,
+                last_mode: RadioMode::FM,
+                favorites: None,
+                dab_favorites: None,
+                last_dab_station: None,
+            })
+            .last_mode;
         self.fm.init(radio.clone());
 
         let app = self.app.clone();
@@ -104,7 +107,7 @@ impl RadioService {
             frequency: self.fm.frequency,
             mode: RadioMode::FM,
             station: self.fm.station_info.lock().unwrap().clone(),
-            favorites: self.fm.favorites.clone()
+            favorites: self.fm.favorites.clone(),
         }
     }
 
@@ -117,7 +120,7 @@ impl RadioService {
     pub fn set_mode(&mut self, mode: RadioMode) {
         self.mode = mode;
     }
-    
+
     // -- FM --
     pub async fn start_fm(&mut self, frequency: u32) -> RadioState {
         self.fm.start(frequency).await;
@@ -158,7 +161,7 @@ impl RadioService {
             last_mode: self.mode.clone(),
             favorites: fm.favorites.clone(),
             dab_favorites: None,
-            last_dab_station: None
+            last_dab_station: None,
         }
     }
 
@@ -176,7 +179,7 @@ impl RadioService {
         }));
     }
 
-    async fn persist_now(&mut self)  {
+    async fn persist_now(&mut self) {
         if let Some(timer) = self.persist_timer.take() {
             timer.abort();
         }
@@ -209,5 +212,4 @@ impl RadioService {
 
         store.close_resource();
     }
-
 }

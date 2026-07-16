@@ -34,8 +34,8 @@ pub const FRAME_HEADER_EXTENDED: usize = 8; // ch + flags + payloadSize(2) + tot
 pub struct RawFrame {
     pub channel_id: u8,
     pub flags: u8,
-    pub msg_id: u16,       // first 2 bytes of payload (after framing)
-    pub payload: Vec<u8>,  // bytes AFTER the 2-byte msg_id (the actual proto data)
+    pub msg_id: u16,          // first 2 bytes of payload (after framing)
+    pub payload: Vec<u8>,     // bytes AFTER the 2-byte msg_id (the actual proto data)
     pub raw_payload: Vec<u8>, // full payload including msg_id bytes
 }
 
@@ -120,7 +120,13 @@ impl FrameParser {
             let raw_payload = self.buf[header_len..total_frame].to_vec();
             self.buf.drain(0..total_frame);
 
-            self.handle_frame(channel_id, flags, raw_payload, announced_total_size, &mut out);
+            self.handle_frame(
+                channel_id,
+                flags,
+                raw_payload,
+                announced_total_size,
+                &mut out,
+            );
         }
         out
     }

@@ -3,6 +3,12 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+definePage({
+  meta: {
+    index: 1,
+  },
+});
+
 interface StationInfo {
   program_id: number;
   genre: string;

@@ -97,7 +97,9 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
             event = bridge_rx.recv() => event,
             () = handle.shutdown_notify().notified() => break 'bridge_wait,
         };
-        let Some(event) = event else { break 'bridge_wait };
+        let Some(event) = event else {
+            break 'bridge_wait;
+        };
 
         match event {
             BridgeEvent::Ready { host, port } => {
@@ -119,7 +121,9 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
                         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
                         handle.set(cmd_tx).await;
                         tokio::spawn(handle_session_events(app.clone(), session_rx));
-                        session.run(session_tx, cmd_rx, handle.shutdown_notify()).await;
+                        session
+                            .run(session_tx, cmd_rx, handle.shutdown_notify())
+                            .await;
                         handle.clear().await;
                         println!("[AA wired] session ended");
                     }
@@ -153,7 +157,14 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
 
     while let Some(event) = rx.recv().await {
         match event {
-            SessionEvent::VideoGeometry { crop_left, crop_top, vis_width, vis_height, tier_width, tier_height } => {
+            SessionEvent::VideoGeometry {
+                crop_left,
+                crop_top,
+                vis_width,
+                vis_height,
+                tier_width,
+                tier_height,
+            } => {
                 let region = (
                     crop_left as f64,
                     crop_top as f64,
@@ -163,11 +174,19 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                     tier_height as f64,
                 );
                 if let Some(v) = video.as_mut() {
-                    v.set_content_region(region.0, region.1, region.2, region.3, region.4, region.5).await;
+                    v.set_content_region(
+                        region.0, region.1, region.2, region.3, region.4, region.5,
+                    )
+                    .await;
                 }
                 pending_geometry = Some(region);
             }
-            SessionEvent::VideoFrame { channel_id, codec, data, .. } => {
+            SessionEvent::VideoFrame {
+                channel_id,
+                codec,
+                data,
+                ..
+            } => {
                 if channel_id != ch::VIDEO {
                     continue; // cluster display not wired up yet
                 }
@@ -180,7 +199,11 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                     let runtime = app.state::<Arc<VideoRuntime>>().inner().clone();
                     let mut new_video = GstVideo::new(runtime, window, "android-auto", "main");
                     if let Some(region) = pending_geometry {
-                        new_video.set_content_region(region.0, region.1, region.2, region.3, region.4, region.5).await;
+                        new_video
+                            .set_content_region(
+                                region.0, region.1, region.2, region.3, region.4, region.5,
+                            )
+                            .await;
                     }
                     video = Some(new_video);
                 }
@@ -238,7 +261,9 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                 output.start(&app).await;
                 audio.insert(channel_id, output);
             }
-            SessionEvent::AudioFrame { channel_id, data, .. } => {
+            SessionEvent::AudioFrame {
+                channel_id, data, ..
+            } => {
                 if let Some(output) = audio.get_mut(&channel_id) {
                     let samples: Vec<i16> = data
                         .chunks_exact(2)

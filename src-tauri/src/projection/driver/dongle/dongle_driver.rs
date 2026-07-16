@@ -1,5 +1,3 @@
-
-
 // Placeholder for the CarLinkit dongle port (see LIVI's dongleDriver.ts): USBDevice/USBEndpoint
 // there are WebUSB types, which nusb::Device covers directly. A USBEndpoint there is only ever
 // used for its `endpointNumber`, so it maps to a bare endpoint address here.
@@ -15,7 +13,7 @@ pub enum AndroidWorkMode {
     AndroidAuto = 1,
     CarLife = 2,
     AndroidMirror = 3,
-    Search = 7
+    Search = 7,
 }
 
 struct DongleDriver {

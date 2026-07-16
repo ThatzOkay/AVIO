@@ -1,4 +1,3 @@
-
 pub struct AudioFormat {
     pub frequency: u32,
     pub channels: u32,

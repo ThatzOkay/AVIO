@@ -47,7 +47,11 @@ pub async fn set_fm_frequency(app: tauri::AppHandle, frequency: u32) -> Result<R
 }
 
 #[tauri::command]
-pub async fn step_fm(app: tauri::AppHandle, direction: i32, fast: bool) -> Result<RadioState, String> {
+pub async fn step_fm(
+    app: tauri::AppHandle,
+    direction: i32,
+    fast: bool,
+) -> Result<RadioState, String> {
     let radio_service = app.state::<Arc<Mutex<radio_service::RadioService>>>();
     let mut radio_service = radio_service.lock().await;
     Ok(radio_service.step_fm(direction, fast).await)

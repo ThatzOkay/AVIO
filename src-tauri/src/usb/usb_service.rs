@@ -109,7 +109,10 @@ impl UsbService {
         println!("[UsbService] Device connected: {:?}", device);
         self.known_devices.insert(device.id(), device.clone());
         if !is_dongle {
-            if !self.last_phone_state && !self.is_phone_suspend_window() && self.is_phone_candidate(&device) {
+            if !self.last_phone_state
+                && !self.is_phone_suspend_window()
+                && self.is_phone_candidate(&device)
+            {
                 self.mark_phone_attached(device.clone());
             }
             self.broadcast_generic_usb_event("attach", device);
@@ -193,7 +196,10 @@ impl UsbService {
 
         let accessory = devices.iter().find(|d| is_accessory_mode(d));
         if let Some(accessory) = accessory {
-            println!("[UsbService] Found device in accessory mode: {:?}", accessory);
+            println!(
+                "[UsbService] Found device in accessory mode: {:?}",
+                accessory
+            );
             self.mark_phone_attached(accessory.clone());
         }
 

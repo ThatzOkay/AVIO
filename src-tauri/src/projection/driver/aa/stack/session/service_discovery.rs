@@ -7,7 +7,9 @@ use aa_proto::aap_protobuf::service::control::message::{
     ConnectionConfiguration, HeadUnitInfo, PingConfiguration, ServiceDiscoveryResponse,
 };
 use aa_proto::aap_protobuf::service::inputsource::{input_source_service, InputSourceService};
-use aa_proto::aap_protobuf::service::media::shared::message::{AudioConfiguration, Insets, UiConfig};
+use aa_proto::aap_protobuf::service::media::shared::message::{
+    AudioConfiguration, Insets, UiConfig,
+};
 use aa_proto::aap_protobuf::service::media::sink::{message as sink_message, MediaSinkService};
 use aa_proto::aap_protobuf::service::media::source::MediaSourceService;
 use aa_proto::aap_protobuf::service::mediaplayback::MediaPlaybackStatusService;
@@ -15,12 +17,16 @@ use aa_proto::aap_protobuf::service::navigationstatus::{
     navigation_status_service, NavigationStatusService,
 };
 use aa_proto::aap_protobuf::service::phonestatus::PhoneStatusService;
-use aa_proto::aap_protobuf::service::sensorsource::{message as sensor_message, SensorSourceService};
+use aa_proto::aap_protobuf::service::sensorsource::{
+    message as sensor_message, SensorSourceService,
+};
 use aa_proto::aap_protobuf::service::wifiprojection::WifiProjectionService;
 use aa_proto::aap_protobuf::service::Service;
 use prost::Message;
 
-use super::super::constants::{bt_pairing_method, ch, display_type, media_codec, sensor_type, video_fps, video_resolution};
+use super::super::constants::{
+    bt_pairing_method, ch, display_type, media_codec, sensor_type, video_fps, video_resolution,
+};
 use super::config::{SessionConfig, VideoCodec};
 
 pub struct ServiceDiscoveryResult {
@@ -90,13 +96,23 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
     } else {
         video_resolution::R1280X720
     };
-    let v_fps = if fps == 60 { video_fps::FPS60 } else { video_fps::FPS30 };
-
-    let (width_margin, height_margin) = if cfg.display_width.unwrap_or(0) > 0 && cfg.display_height.unwrap_or(0) > 0 {
-        letterbox_margins(cfg.display_width.unwrap(), cfg.display_height.unwrap(), v_w, v_h)
+    let v_fps = if fps == 60 {
+        video_fps::FPS60
     } else {
-        (0, 0)
+        video_fps::FPS30
     };
+
+    let (width_margin, height_margin) =
+        if cfg.display_width.unwrap_or(0) > 0 && cfg.display_height.unwrap_or(0) > 0 {
+            letterbox_margins(
+                cfg.display_width.unwrap(),
+                cfg.display_height.unwrap(),
+                v_w,
+                v_h,
+            )
+        } else {
+            (0, 0)
+        };
 
     // View Area -> margins (AR letterbox + user view inset). Safe Area -> content_insets.
     let view_top = cfg.main_view_area_top.unwrap_or(0);
@@ -356,7 +372,11 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
     });
 
     // -- Sensor Source (ch=1) --
-    let fuel_types = if cfg.fuel_types.is_empty() { vec![1] } else { cfg.fuel_types.clone() };
+    let fuel_types = if cfg.fuel_types.is_empty() {
+        vec![1]
+    } else {
+        cfg.fuel_types.clone()
+    };
     let sensor = |t: i32| sensor_message::Sensor { sensor_type: t };
     channels.push(Service {
         id: ch::SENSOR as i32,
@@ -366,7 +386,7 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
                 sensor(sensor_type::GPS_LOCATION),
                 sensor(sensor_type::NIGHT_DATA),
                 sensor(sensor_type::CAR_SPEED),
-                sensor(8),  // GEAR
+                sensor(8), // GEAR
                 sensor(sensor_type::PARKING_BRAKE),
                 sensor(6),  // FUEL
                 sensor(5),  // ODOMETER
@@ -399,9 +419,9 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
         id: ch::INPUT as i32,
         input_source_service: Some(InputSourceService {
             keycodes_supported: vec![
-                3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 66,
-                79, 82, 84, 85, 86, 87, 88, 89, 90, 91, 111, 126, 127, 164, 219, 231, 260, 261, 262, 263,
-                65536,
+                3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                25, 26, 66, 79, 82, 84, 85, 86, 87, 88, 89, 90, 91, 111, 126, 127, 164, 219, 231,
+                260, 261, 262, 263, 65536,
             ],
             touchscreen: vec![input_source_service::TouchScreen {
                 width: touch_w,
@@ -418,8 +438,14 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
     channels.push(Service {
         id: ch::BLUETOOTH as i32,
         bluetooth_service: Some(BluetoothService {
-            car_address: cfg.bt_mac_address.clone().unwrap_or_else(|| "00:00:00:00:00:00".to_string()),
-            supported_pairing_methods: vec![bt_pairing_method::PIN, bt_pairing_method::NUMERIC_COMPARISON],
+            car_address: cfg
+                .bt_mac_address
+                .clone()
+                .unwrap_or_else(|| "00:00:00:00:00:00".to_string()),
+            supported_pairing_methods: vec![
+                bt_pairing_method::PIN,
+                bt_pairing_method::NUMERIC_COMPARISON,
+            ],
         }),
         ..Default::default()
     });
