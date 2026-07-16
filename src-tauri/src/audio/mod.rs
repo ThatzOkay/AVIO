@@ -92,29 +92,29 @@ pub fn get_current_volume() -> Result<u8, String> {
 pub fn get_default_device_name() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        return cpvc::wasapi::wasapi::get_sound_devices()
+        cpvc::wasapi::wasapi::get_sound_devices()
             .map_err(|e| format!("{e:?}"))?
             .into_iter()
             .next()
-            .ok_or_else(|| "No default device found".to_string());
+            .ok_or_else(|| "No default device found".to_string())
     }
 
     #[cfg(target_os = "macos")]
     {
-        return cpvc::coreaudio::coreaudio::get_sound_devices()
+        cpvc::coreaudio::coreaudio::get_sound_devices()
             .map_err(|e| format!("{e:?}"))?
             .into_iter()
             .next()
-            .ok_or_else(|| "No default device found".to_string());
+            .ok_or_else(|| "No default device found".to_string())
     }
 
     #[cfg(target_os = "linux")]
     {
-        return cpvc::pulseaudio::pulseaudio::get_sound_devices()
+        cpvc::pulseaudio::pulseaudio::get_sound_devices()
             .map_err(|e| format!("{e:?}"))?
             .into_iter()
             .next()
-            .ok_or_else(|| "No default device found".to_string());
+            .ok_or_else(|| "No default device found".to_string())
     }
 }
 
