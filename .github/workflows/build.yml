@@ -437,7 +437,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # librtlsdr.dll re-exports its own statically-linked pthread_*
           # symbols, colliding with MinGW's libpthread.a at link time.
-          RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition'
+          RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition -C link-arg=-v'
         with:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
