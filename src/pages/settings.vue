@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { v } from "vue-router/dist/index-BQLwgiyK.js";
-
 definePage({
   meta: {
     index: 2,
