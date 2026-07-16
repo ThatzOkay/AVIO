@@ -165,6 +165,17 @@ jobs:
           rustup toolchain install stable-x86_64-pc-windows-gnu
           rustup default stable-x86_64-pc-windows-gnu
 
+      # Defender's real-time scanner can lock a just-written exe/object file
+      # mid-build, crashing ld.exe with no diagnostic output.
+      - name: Exclude build dirs from Defender [windows]
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "D:\a" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.rustup" -ErrorAction SilentlyContinue
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
