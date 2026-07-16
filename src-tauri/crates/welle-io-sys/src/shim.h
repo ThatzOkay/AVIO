@@ -1,4 +1,16 @@
 #pragma once
+
+// C:\mingw64's bundled headers don't declare these C11 additions, but its
+// libstdc++ assumes they exist and fails to compile <cstdlib>/<ctime>.
+#if defined(__MINGW32__)
+struct timespec;
+extern "C" {
+[[noreturn]] void quick_exit(int) noexcept;
+int at_quick_exit(void (*)()) noexcept;
+int timespec_get(struct timespec*, int);
+}
+#endif
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
