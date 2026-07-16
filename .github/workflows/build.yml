@@ -143,21 +143,19 @@ jobs:
           path-type: inherit
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-fftw mingw-w64-x86_64-bzip2 perl
 
-      # Don't redirect cc-rs's compiler to MSYS2: rustc's own final-link
-      # step always uses the runner's separate C:\mingw64, so compiling with
-      # a different MinGW distro produces ABI-mismatched object code
-      # (undefined __imp__vsnprintf etc). Only fftw3 headers/libs are
-      # actually needed from MSYS2 - welle-io-sys/build.rs's Windows branch
-      # adds those directly (like its macOS branch does via brew), so just
-      # expose MSYS2's root (varies by runner image) for it to read. PERL
-      # still needs pinning: bare `perl` resolves to Strawberry's
-      # POSIX-hostile one, which OpenSSL's Configure rejects.
+      # The runner's own ambient C:\mingw64 has a broken libstdc++/headers
+      # pairing and isn't what welle.io upstream tests against either - use
+      # MSYS2 consistently for compiling and linking instead of mixing.
       - name: Resolve MSYS2 paths [windows]
         if: matrix.os == 'windows'
         shell: msys2 {0}
         run: |
           echo "PERL=$(cygpath -m /usr/bin/perl.exe)" >> "$GITHUB_ENV"
-          echo "MSYS2_MINGW64_ROOT=$(cygpath -m /mingw64)" >> "$GITHUB_ENV"
+          gcc_path="$(cygpath -m /mingw64/bin/gcc.exe)"
+          echo "CC_x86_64-pc-windows-gnu=$gcc_path" >> "$GITHUB_ENV"
+          echo "CXX_x86_64-pc-windows-gnu=$(cygpath -m /mingw64/bin/g++.exe)" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=$gcc_path" >> "$GITHUB_ENV"
+          echo "$(cygpath -m /mingw64/bin)" >> "$GITHUB_PATH"
 
       - name: Switch to GNU Rust toolchain [windows]
         if: matrix.os == 'windows'
@@ -170,7 +168,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.arch }}
+          key: ${{ matrix.arch }}-v2
 
       - name: Setup bun
         shell: bash
@@ -423,14 +421,9 @@ jobs:
           "PROTOC=$dir\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$dir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      # librtlsdr for Windows (DLL + generated MSVC and MinGW import libs) is
-      # vendored under src-tauri/crates/tauri-plugin-rtl-sdr/vendor/windows-x64/
-      # - see the README there. build.rs adds it to the linker search path and
-      # tauri.windows.conf.json bundles the DLL next to the exe, so nothing needs
-      # to be fetched or generated here. Its dll.a re-exports librtlsdr.dll's own
-      # pthread_* symbols (upstream statically links pthreads into the DLL and
-      # exports them), which collide with MinGW's own libpthread.a at link time
-      # ("multiple definition") - allow it rather than trying to suppress one side.
+      # librtlsdr for Windows (DLL + generated MSVC/MinGW import libs) is
+      # vendored under tauri-plugin-rtl-sdr/vendor/windows-x64/ - see the
+      # README there. Nothing to fetch/generate here; build.rs handles it.
 
       - name: Install deps (bun) [windows]
         if: matrix.os == 'windows'
@@ -442,6 +435,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # librtlsdr.dll re-exports its own statically-linked pthread_*
+          # symbols, colliding with MinGW's libpthread.a at link time.
           RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition'
         with:
           uploadWorkflowArtifacts: true
