@@ -33,11 +33,16 @@ fn main() {
     }
 
     // fftw3 has no package for the default C:\mingw64 toolchain, so CI
-    // installs it via MSYS2 instead and points us at that install's root.
+    // installs it via MSYS2 instead and points us at its headers here.
+    // Deliberately no matching -L/link-search: nothing links against fftw3
+    // yet (only its header is used), and adding MSYS2's lib dir to the
+    // search path pulls in its libpthread.a/CRT import libs ahead of
+    // C:\mingw64's own for unrelated symbols too (undefined reference to
+    // `_assert` etc.) - the same cross-toolchain mixing bug as compiling
+    // with a different MinGW than what links, just via -L instead of CC/CXX.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         if let Ok(root) = std::env::var("MSYS2_MINGW64_ROOT") {
             build.include(format!("{root}/include"));
-            println!("cargo:rustc-link-search=native={root}/lib");
         }
     }
 
