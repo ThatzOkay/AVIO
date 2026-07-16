@@ -195,11 +195,15 @@ jobs:
       # ----------------------------
       # Linux (x64 + arm64, both native runners)
       # ----------------------------
+      # /var/cache/apt/archives is root-owned, so actions/cache's restore
+      # (running as the unprivileged runner user) can't extract into it -
+      # every file fails with "Permission denied" and the cache is a no-op.
+      # Point apt at a runner-owned dir instead so caching needs no root.
       - name: Cache apt packages [linux]
         if: matrix.os == 'linux'
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives/*.deb
+          path: ${{ runner.temp }}/apt-archives/*.deb
           key: apt-${{ matrix.arch }}-${{ hashFiles('.github/apt-packages-linux.txt') }}
           restore-keys: |
             apt-${{ matrix.arch }}-
@@ -209,11 +213,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/apt-archives/partial"
           # ports.ubuntu.com (arm64's mirror) is far less redundantly mirrored than
           # the main x86_64 archive and occasionally 404s on individual package files
           # mid-sync - retry the whole update+install rather than failing on a flake.
           for attempt in 1 2 3; do
             if sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+                -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives" \
                 $(cat .github/apt-packages-linux.txt); then
               break
             fi
@@ -438,6 +444,9 @@ jobs:
           # symbols, colliding with MinGW's libpthread.a at link time.
           RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition'
         with:
+          # Without this, tauri's bundler looks for the externalBin sidecar
+          # under the msvc triple instead of the gnu one actually built.
+          args: '--target x86_64-pc-windows-gnu'
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
 
