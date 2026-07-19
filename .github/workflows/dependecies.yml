@@ -1,5 +1,5 @@
 name: dependencies
-run-name: 'dependencies → ${{ github.event_name == ''workflow_dispatch'' && (inputs.include_major && ''major'' || ''minor+patch'') || ''minor+patch'' }} on ${{ github.event_name == ''workflow_dispatch'' && inputs.branch || ''dev'' }}'
+run-name: 'dependencies → ${{ github.event_name == ''workflow_dispatch'' && (inputs.include_major && ''major'' || ''minor+patch'') || ''minor+patch'' }} on ${{ github.event_name == ''workflow_dispatch'' && inputs.branch || ''main'' }}'
 
 on:
   schedule:
@@ -24,11 +24,11 @@ permissions:
 
 jobs:
   update:
-    name: Update dependencies on ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'dev' }}
+    name: Update dependencies on ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'main' }}
     runs-on: ubuntu-latest
 
     env:
-      TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'dev' }}
+      TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'main' }}
 
     steps:
       - name: Checkout target branch
