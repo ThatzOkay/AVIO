@@ -19,6 +19,24 @@ if (process.platform !== "linux") {
   process.exit(0);
 }
 
+// This script has no cross-compilation support: meson/ninja build for the host arch, and the
+// dependency bundling below walks `ldd` output straight off the local filesystem. Left
+// unguarded, cross-compiling (see scripts/build-gst-host-sidecar.ts's SIDECAR_TARGET_TRIPLE)
+// would silently bundle host-arch .so files into what's supposed to be a target-arch AppImage -
+// wrong-architecture libs that only surface as a crash on the actual device, not a build error.
+if (
+  process.env.SIDECAR_TARGET_TRIPLE &&
+  process.env.SIDECAR_TARGET_TRIPLE !==
+    /host:\s*(\S+)/.exec(execSyncText("rustc", ["-vV"]))?.[1]
+) {
+  console.error(
+    `[avio-compositor] cross-compiling to ${process.env.SIDECAR_TARGET_TRIPLE} is not supported yet ` +
+      "(meson has no cross-file/sysroot here, and dependency bundling relies on host `ldd`). " +
+      "Build avio-compositor separately for the target and stage it into src-tauri/compositor/ before bundling.",
+  );
+  process.exit(1);
+}
+
 const repoRoot = path.dirname(import.meta.dir);
 const srcDir = path.join(repoRoot, "src-tauri", "crates", "avio-compositor");
 const buildDir = path.join(srcDir, "build");
@@ -53,6 +71,12 @@ if (!pkgConfigExists("wlroots-0.20")) {
     "-Dlibxkbcommon:enable-tools=false",
     "-Dlibxkbcommon:enable-xkbregistry=false",
   );
+}
+// wlroots-0.20 needs pixman >=0.46.0; some distros (Debian trixie: 0.44.0) ship older. Meson
+// doesn't auto-fallback on a version mismatch (only on outright "not found"), so force it
+// explicitly when the system one is too old.
+if (!pkgConfigAtLeast("pixman-1", "0.46.0")) {
+  fallback += ",pixman";
 }
 mesonArgs.push(`--force-fallback-for=${fallback}`);
 
@@ -201,6 +225,11 @@ function commandExists(cmd: string): boolean {
 
 function pkgConfigExists(pkg: string): boolean {
   return Bun.spawnSync(["pkg-config", "--exists", pkg]).success;
+}
+
+function pkgConfigAtLeast(pkg: string, version: string): boolean {
+  return Bun.spawnSync(["pkg-config", `--atleast-version=${version}`, pkg])
+    .success;
 }
 
 function copyFilePreservingMode(src: string, dest: string): void {

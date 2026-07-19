@@ -38,33 +38,6 @@ fn to_gst_codec(codec: VideoCodec) -> GstVideoCodec {
     }
 }
 
-/// The AA video is a separate native/compositor surface, not part of the main window's webview
-/// content — focusing the main window (opaque) would raise it above that surface and hide the
-/// video. This transparent, always-on-top, chrome-less window exists solely to receive input
-/// focus and capture touch events instead (see `src/pages/aa-touch.vue`).
-///
-/// Goes borderless-fullscreen on the monitor, same as "main" (see tauri.conf.json) and the AA
-/// video plane the external compositor renders. There's exactly one physical screen on the
-/// target device, so matching windows against each other's reported geometry was never the
-/// right approach — every window just covers all of it.
-pub(crate) fn ensure_touch_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
-    if let Some(window) = app.get_webview_window("aa-touch") {
-        return Some(window);
-    }
-
-    tauri::WebviewWindowBuilder::new(app, "aa-touch", tauri::WebviewUrl::App("/aa-touch".into()))
-        .title("aa-touch")
-        .transparent(true)
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .shadow(false)
-        .fullscreen(true)
-        .build()
-        .inspect_err(|e| eprintln!("[AA wired] failed to create aa-touch window: {e}"))
-        .ok()
-}
-
 /// "main"'s actual physical size, now that it's resized to fill the monitor at startup (see
 /// lib.rs). Fed into `SessionConfig::display_width/height` so the SDR computes real letterbox
 /// margins for our screen's aspect ratio — without it, the phone assumes its 16:9
@@ -211,39 +184,27 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                     if !video_visible {
                         v.set_visible(&app, true).await;
                         video_visible = true;
-                        // Frames resumed after a host-ui detour (see HostUiRequested below),
-                        // which only hides the touch overlay rather than closing it — bring it
-                        // back now so touch input works again post-resume.
-                        if let Some(window) = ensure_touch_window(&app) {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        // SessionEvent::Connected only fires once, at initial connection - after
+                        // a HostUiRequested detour set aaStatus to "host-ui" (see App.vue's
+                        // androidAutoActive), nothing else ever flips it back to "connected", so
+                        // the UI stayed stuck on the resume screen even once frames resumed.
+                        let _ = app.emit("aa-status", "connected");
                     }
                     v.push(&app, to_gst_codec(codec), &data).await;
                 }
                 if is_first_frame {
-                    // Only create the touch overlay *after* gst-host's video surface exists
-                    // (rather than at Connected, before any video) — a newly-mapped window is
-                    // more likely to raise above an already-fullscreen surface than one that's
-                    // just re-asserting focus/always-on-top on an existing mapping.
-                    if let Some(window) = ensure_touch_window(&app) {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-
                     // Creating the video player maps a new native surface (waylandsink, via
                     // gst-host), which now also requests fullscreen directly on Linux when no
                     // external compositor is present (see gst_video.cc) — a state transition
-                    // that can both steal focus and promote the sink above other clients in
-                    // stacking order while it settles. There's no signal for "surface mapped and
-                    // fullscreen settled", so keep reclaiming both focus and always-on-top for
-                    // longer than a plain (non-fullscreen) window needed before.
+                    // that can steal focus while it settles. There's no signal for "surface
+                    // mapped and fullscreen settled", so keep reclaiming focus on "main" (whose
+                    // own transparent pointer-capture layer now handles touch, see App.vue) for
+                    // longer than a single re-assertion would cover.
                     let app_for_focus = app.clone();
                     tokio::spawn(async move {
                         for _ in 0..30 {
                             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                            if let Some(window) = app_for_focus.get_webview_window("aa-touch") {
-                                let _ = window.set_always_on_top(true);
+                            if let Some(window) = app_for_focus.get_webview_window("main") {
                                 let _ = window.set_focus();
                             }
                         }
@@ -278,19 +239,10 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                 }
             }
             SessionEvent::Connected => {
-                // The touch overlay is created later, on the first video frame (see
-                // SessionEvent::VideoFrame) — after gst-host's surface exists, not before.
                 let _ = app.emit("aa-status", "connected");
             }
             SessionEvent::HostUiRequested => {
-                println!("[AA wired] HostUiRequested: closing touch, hiding video, focusing main");
-                // No AA video to touch right now — get rid of the overlay so it doesn't sit
-                // there (invisibly) intercepting clicks meant for the main window's resume
-                // button. hide() alone isn't reliably applied on this WM (confirmed: touch
-                // events kept reaching it after hide() returned Ok(())) — close it instead;
-                // ensure_touch_window() already lazily recreates it once video resumes.
-                let close_result = app.get_webview_window("aa-touch").map(|w| w.close());
-                println!("[AA wired] aa-touch close(): {close_result:?}");
+                println!("[AA wired] HostUiRequested: hiding video, focusing main");
                 // Otherwise the last projected frame just stays frozen on screen, visible
                 // underneath the resume button, until the phone starts sending fresh frames.
                 if let Some(v) = video.as_mut() {
@@ -321,8 +273,5 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
     }
     for (_, mut output) in audio.drain() {
         output.stop().await;
-    }
-    if let Some(window) = app.get_webview_window("aa-touch") {
-        let _ = window.close();
     }
 }

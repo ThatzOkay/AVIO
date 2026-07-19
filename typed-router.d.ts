@@ -38,13 +38,6 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/aa-touch': RouteRecordInfo<
-      '/aa-touch',
-      '/aa-touch',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
     '/radio': RouteRecordInfo<
       '/radio',
       '/radio',
@@ -75,14 +68,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/index.vue': {
       routes:
         | '/'
-      views:
-        | never
-      pathParamNames:
-        | never
-    }
-    'src/pages/aa-touch.vue': {
-      routes:
-        | '/aa-touch'
       views:
         | never
       pathParamNames:

@@ -17,16 +17,22 @@ const resumeAndroidAuto = () => {
 
 <template>
   <v-container
-    v-if="statusStore.aaStatus === 'host-ui'"
-    class="fill-height d-flex align-center justify-center"
+    fluid
+    class="relative fill-width fill-height d-flex align-center justify-center"
   >
-    <v-btn
-      size="x-large"
-      color="primary"
-      rounded="xl"
-      @click="resumeAndroidAuto"
-    >
-      Resume Android Auto
-    </v-btn>
+    <v-card class="w-100 h-100 d-flex flex-column align-center justify-center">
+      <v-btn
+        v-if="statusStore.aaStatus === 'host-ui'"
+        size="x-large"
+        color="primary"
+        rounded="xl"
+        @click="resumeAndroidAuto"
+      >
+        Resume Android Auto
+      </v-btn>
+      <v-card-text v-else class="d-flex align-center text-center">
+        <h3>Connected phone to start Android Auto</h3>
+      </v-card-text>
+    </v-card>
   </v-container>
 </template>

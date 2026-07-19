@@ -100,18 +100,32 @@ pub fn gst_env(gst_root: &Path) -> Vec<(String, String)> {
 
     let registry = std::env::temp_dir().join("avio-gstreamer-registry.bin");
 
-    env.push(("GST_PLUGIN_SYSTEM_PATH".to_owned(), "".to_owned()));
+    // Inside an AppImage there's no meaningful "system" GStreamer to fall back to - the host may
+    // have an incompatible or absent install, so isolate to just the bundled plugins by blanking
+    // the system path. Outside one (a raw dev/debug binary - devcontainer, `cargo run`, etc. -
+    // where a bundled distro may be partial or absent), leave it alone so the host's own
+    // gstreamerN.0-* packages still fill in whatever the bundle doesn't cover.
+    let in_appimage = std::env::var_os("APPIMAGE").is_some();
+
+    // GStreamer prefers the "_1_0"-suffixed variant of each var over the plain name when both
+    // are set - AppImage's linuxdeploy-generated AppRun sets the _1_0 ones pointing elsewhere,
+    // silently winning over the plain overrides below unless we also override the versioned ones.
+    for suffix in ["", "_1_0"] {
+        if in_appimage {
+            env.push((format!("GST_PLUGIN_SYSTEM_PATH{suffix}"), "".to_owned()));
+        }
+        env.push((
+            format!("GST_PLUGIN_PATH{suffix}"),
+            plugin_path.to_str().unwrap_or_default().to_owned(),
+        ));
+        env.push((
+            format!("GST_PLUGIN_SCANNER{suffix}"),
+            plugin_scanner.to_str().unwrap_or_default().to_owned(),
+        ));
+    }
     env.push((
         "GST_REGISTRY".to_owned(),
         registry.to_str().unwrap_or_default().to_owned(),
-    ));
-    env.push((
-        "GST_PLUGIN_PATH".to_owned(),
-        plugin_path.to_str().unwrap_or_default().to_owned(),
-    ));
-    env.push((
-        "GST_PLUGIN_SCANNER".to_owned(),
-        plugin_scanner.to_str().unwrap_or_default().to_owned(),
     ));
 
     if std::env::consts::OS == "macos" {

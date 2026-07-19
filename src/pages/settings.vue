@@ -7,12 +7,16 @@ definePage({
 </script>
 
 <template>
-  <v-container class="fill-height d-flex align-center justify-center">
-    <v-card>
-      <v-card-title class="text-h5">Settings</v-card-title>
-      <v-card-text>
-        <p>Settings page content goes here.</p>
-      </v-card-text>
+  <v-container
+    fluid
+    style="position: unset"
+    class="relative fill-width fill-height d-flex align-center justify-center"
+  >
+    <v-card class="w-100 h-100 d-flex flex-column align-center justify-center">
+      <v-row>
+        <v-col> </v-col>
+        <v-col> </v-col>
+      </v-row>
     </v-card>
   </v-container>
 </template>

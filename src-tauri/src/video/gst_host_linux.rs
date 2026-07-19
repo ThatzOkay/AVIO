@@ -7,6 +7,8 @@ use tokio::{
     sync::Mutex,
 };
 
+use crate::audio::gstreamer::{gst_env, resolve_gstreamer_root};
+
 /// Shared handle to the out-of-process pipeline host. One instance serves every [`super::gst_video::GstVideo`]
 /// player on this platform, multiplexed by player id over a single socket.
 pub type GstHostHandle = Arc<Mutex<GstHost>>;
@@ -97,12 +99,24 @@ impl GstHost {
         };
 
         let mut command = tokio::process::Command::new(&host_bin);
+        command.arg(&sock_path).arg(&crash_path).kill_on_drop(true);
+        // Bare gst_init() in gst_video.cc only scans system GStreamer plugin paths - point it at
+        // the bundled distribution instead (same one audio/gstreamer.rs already uses for
+        // gst-launch-1.0), or it inherits whatever GST_PLUGIN_SYSTEM_PATH the launcher/AppImage
+        // runtime sets, which isn't guaranteed to have the plugins gst-host actually needs
+        // (e.g. AppImage's own AppRun overriding GST_PLUGIN_SYSTEM_PATH_1_0 to a path that was
+        // never populated, silently losing "appsrc" and every other core element). Applied before
+        // the GST_GL_* overrides below so gst_env()'s bulk-copied ambient env can't clobber them.
+        if let Some(gst_root) = resolve_gstreamer_root(app) {
+            command.envs(gst_env(&gst_root));
+        } else {
+            eprintln!(
+                "[GstHost] bundled GStreamer not found; falling back to system plugin paths"
+            );
+        }
         command
-            .arg(&sock_path)
-            .arg(&crash_path)
             .env("GST_GL_WINDOW", "surfaceless")
-            .env("GST_GL_PLATFORM", "egl")
-            .kill_on_drop(true);
+            .env("GST_GL_PLATFORM", "egl");
         // AVIO_GST_PRELOAD LD_PRELOADs an override lib into the gst-host child only.
         if let Ok(preload) = std::env::var("AVIO_GST_PRELOAD") {
             command.env("LD_PRELOAD", preload);

@@ -2,12 +2,11 @@
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use super::session_handle::AaSessionHandle;
-use super::stack::channels::input_channel::touch_action;
+use super::stack::channels::input_channel::{button_key, touch_action};
 use super::stack::session::session::SessionCommand;
-use super::wired_driver::ensure_touch_window;
 
 // Matches SessionConfig::default()'s advertised touchscreen tier until real per-session
 // settings exist.
@@ -44,25 +43,43 @@ pub async fn aa_send_touch(
 
 /// Resumes projected AA content after the phone kicked the display back to its native/host UI
 /// (see the "aa-status" event with payload "host-ui").
+///
+/// A bare `RequestVideoFocus` isn't reliably honored once the phone is holding NATIVE focus -
+/// pairing it with a HOME button press first more reliably relinquishes that focus back to
+/// projection.
 #[tauri::command]
-pub async fn aa_resume(
-    app: AppHandle,
-    handle: State<'_, Arc<AaSessionHandle>>,
-) -> Result<(), String> {
-    // Eagerly reopen the touch overlay right on click rather than only reacting to the next AA
-    // video frame — the phone resuming projection depends on it actually receiving and honoring
-    // our RequestVideoFocus, which isn't guaranteed, so the touch surface shouldn't be stuck
-    // waiting on that round trip. ensure_touch_window() is a no-op if it's already open.
-    let touch_result = ensure_touch_window(&app).map(|w| {
-        let _ = w.show();
-        let _ = w.set_focus();
-    });
-    println!(
-        "[AA resume] ensure_touch_window: {}",
-        touch_result.is_some()
-    );
-
+pub async fn aa_resume(handle: State<'_, Arc<AaSessionHandle>>) -> Result<(), String> {
+    let key_codes = [button_key::HOME];
+    handle
+        .send(SessionCommand::Button {
+            key_codes: key_codes.to_vec(),
+            down: true,
+            longpress: false,
+        })
+        .await;
+    handle
+        .send(SessionCommand::Button {
+            key_codes: key_codes.to_vec(),
+            down: false,
+            longpress: false,
+        })
+        .await;
     let reached_session = handle.send(SessionCommand::RequestVideoFocus).await;
-    println!("[AA resume] RequestVideoFocus sent, reached a live session: {reached_session}");
+    println!("[AA resume] HOME + RequestVideoFocus sent, reached a live session: {reached_session}");
     Ok(())
+}
+
+/// Toggles the main window's background color in lockstep with App.vue's `show-video` class.
+/// WebKitGTK needs both the CSS `background: transparent` and an explicit zero-alpha window
+/// background to actually punch through to the AA video plane underneath — but only while
+/// projecting. Leaving the window's own background permanently transparent (rather than
+/// toggling it here) defeats WebKitGTK's normal opaque default for the rest of the app too,
+/// wherever Vuetify's own CSS doesn't happen to paint something explicit.
+#[tauri::command]
+pub fn aa_set_main_transparent(app: AppHandle, transparent: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("no \"main\" window")?;
+    let color = transparent.then_some(tauri::window::Color(0, 0, 0, 0));
+    window.set_background_color(color).map_err(|e| e.to_string())
 }

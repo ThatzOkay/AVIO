@@ -184,7 +184,8 @@ impl AudioOutput {
                 break;
             };
             self.bytes_written += buf.len();
-            if stdin.write_all(&buf).await.is_err() {
+            if let Err(e) = stdin.write_all(&buf).await {
+                eprintln!("[AudioOutput] stdin write failed: {e} (subprocess likely dead)");
                 self.writing = false;
                 return;
             }

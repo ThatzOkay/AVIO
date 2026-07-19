@@ -1,11 +1,7 @@
 <template>
-  <!-- The aa-touch window is a transparent, chrome-less overlay just for capturing touch input
-       over the Android Auto video surface — it must never render the app shell (Vuetify's
-       v-app background isn't transparent, which would hide the video underneath it). -->
-  <RouterView v-if="isTouchWindow" />
-  <v-app v-else>
-    <TopBar v-if="!androidAutoActive" />
-    <v-main>
+  <v-app>
+    <TopBar />
+    <v-main v-if="!androidAutoActive">
       <router-view v-slot="{ Component }" class="inline">
         <transition :name="transitionName">
           <component :is="Component" />
@@ -13,14 +9,26 @@
       </router-view>
     </v-main>
     <BottomBar v-if="!androidAutoActive" />
+    <!-- While projecting, this replaces the app shell entirely: a transparent, full-viewport
+         layer that both lets the compositor's video plane underneath show through (via the
+         show-video class below) and captures touch/pointer input for it — same window, same
+         element, so no separate overlay window is needed once the main window itself can go
+         transparent (see tauri.conf.json + aa_set_main_transparent). -->
+    <div
+      v-if="androidAutoActive"
+      class="aa-video-layer"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
+    />
   </v-app>
 </template>
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { computed, onBeforeMount, ref } from "vue";
+import { computed, onBeforeMount, onMounted, ref, watch } from "vue";
 import { useStatusStore } from "./store/statusStore";
 import BottomBar from "./components/BottomBar.vue";
 import TopBar from "./components/TopBar.vue";
@@ -28,11 +36,49 @@ import { useRouter } from "vue-router";
 
 const statusStore = useStatusStore();
 const router = useRouter();
-const isTouchWindow = getCurrentWindow().label === "aa-touch";
 
 // Hidden only while actively projecting video. "host-ui" (phone kicked back to its home
 // screen) shows the sidebar again alongside the resume button.
 const androidAutoActive = computed(() => statusStore.aaStatus === "connected");
+
+const touchActive = ref(false);
+
+const sendTouch = (event: PointerEvent, phase: "down" | "move" | "up") => {
+  const x = event.clientX / window.innerWidth;
+  const y = event.clientY / window.innerHeight;
+  void invoke("aa_send_touch", { x, y, phase });
+};
+
+const onPointerDown = (event: PointerEvent) => {
+  touchActive.value = true;
+  sendTouch(event, "down");
+};
+
+const onPointerMove = (event: PointerEvent) => {
+  if (!touchActive.value) return;
+  sendTouch(event, "move");
+};
+
+const onPointerUp = (event: PointerEvent) => {
+  if (!touchActive.value) return;
+  touchActive.value = false;
+  sendTouch(event, "up");
+};
+
+// The main window can go transparent (tauri.conf.json enables the capability) so that when the
+// DOM itself goes transparent, the AA video plane underneath (owned by the compositor, not this
+// webview) becomes visible. Both the CSS class (document.documentElement, not just this
+// component's own root, since Vue's scoped styles can't reach html/body anyway) and the
+// window's own background color need toggling together — only while projecting, or WebKitGTK's
+// normal opaque default breaks for the rest of the app too.
+watch(
+  androidAutoActive,
+  (active) => {
+    document.documentElement.classList.toggle("show-video", active);
+    void invoke("aa_set_main_transparent", { transparent: active });
+  },
+  { immediate: true },
+);
 
 const transitionName = ref("slide-left");
 
@@ -58,9 +104,41 @@ onBeforeMount(async () => {
     statusStore.setAaStatus(event.payload);
   });
 });
+
+onMounted(() => {
+  const windowViewWidth = window.innerWidth;
+  const windowViewHeight = window.innerHeight;
+  const scaleFactor = window.devicePixelRatio;
+
+  console.log(
+    `Window view width: ${windowViewWidth}, height: ${windowViewHeight}, scale factor: ${scaleFactor}`,
+  );
+});
 </script>
 
+<style>
+/* Unscoped: needs to reach html/body, which a scoped style can't target. Punches the DOM
+   background transparent while AA is projecting, so the compositor's video plane underneath
+   this (now OS-transparent, see tauri.conf.json) window becomes visible. */
+html.show-video,
+html.show-video body,
+html.show-video #app,
+html.show-video .v-application {
+  background: transparent !important;
+}
+</style>
+
 <style scoped>
+.aa-video-layer {
+  position: absolute;
+  left: 0;
+  top: 87px;
+  width: 1671px;
+  height: 940px;
+  touch-action: none;
+  border: 1px solid red; /* debug */
+}
+
 .v-main {
   position: relative;
   overflow: hidden;

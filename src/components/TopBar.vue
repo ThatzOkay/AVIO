@@ -68,11 +68,7 @@ const updateBrightness = async (brightness: number) => {
 </script>
 
 <template>
-  <v-layout
-    :full-height="false"
-    style="height: 70px !important"
-    class="mt-2 border-bottom"
-  >
+  <div style="height: 70px !important" class="mt-2 border-bottom">
     <v-row style="height: 70px">
       <v-col class="d-flex align-center">
         <div
@@ -194,5 +190,5 @@ const updateBrightness = async (brightness: number) => {
       >
       <v-col></v-col>
     </v-row>
-  </v-layout>
+  </div>
 </template>

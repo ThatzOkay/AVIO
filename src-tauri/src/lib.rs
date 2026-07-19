@@ -39,9 +39,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app: &mut tauri::App| {
-            let main_window = app.get_webview_window("main").unwrap();
-
-            main_window.set_resizable(false).ok();
+            // Note: the main window's background color is NOT set transparent here - it's
+            // toggled at runtime by aa_set_main_transparent, in sync with App.vue's `show-video`
+            // class. Setting it once and unconditionally would defeat WebKitGTK's normal opaque
+            // default for the whole app, not just AA video mode.
 
             let app_handle = app.handle().clone();
 
@@ -99,7 +100,8 @@ pub fn run() {
             radio::recall_fm_favorite,
             open_gst_test_window,
             projection::driver::aa::commands::aa_send_touch,
-            projection::driver::aa::commands::aa_resume
+            projection::driver::aa::commands::aa_resume,
+            projection::driver::aa::commands::aa_set_main_transparent
         ])
         .build(context)
         .expect("error while running tauri application")

@@ -39,12 +39,14 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_touch.h>
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/addon.h>
 #include <wlr/util/log.h>
@@ -2110,8 +2112,14 @@ int main(int argc, char *argv[]) {
 	wlr_data_device_manager_create(server.wl_display);
 	/* AVIO: waylandsink scales the decoded video to its surface via wp_viewporter */
 	wlr_viewporter_create(server.wl_display);
+	/* AVIO: lets grim/wlr-screencopy clients capture this compositor's own composited output
+	 * directly (nested under cage, which only sees a single client, not our scene graph). */
+	wlr_screencopy_manager_v1_create(server.wl_display);
 
 	server.output_layout = wlr_output_layout_create(server.wl_display);
+	/* AVIO: grim needs xdg-output to resolve real output geometry (falls back to a 0x0 guess
+	 * without it, since it doesn't otherwise know each wl_output's logical size/position). */
+	wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
 
 	wl_list_init(&server.outputs);
 	server.new_output.notify = server_new_output;

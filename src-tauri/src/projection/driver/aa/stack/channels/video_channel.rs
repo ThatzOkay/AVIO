@@ -76,7 +76,11 @@ impl VideoChannel {
 
             av_msg::STOP_INDICATION => {
                 println!("[VideoChannel ch={}] stream stopped", self.channel_id);
-                VideoEvent::None
+                // The phone can stop the stream without ever sending a VIDEO_FOCUS_REQUEST
+                // (e.g. ending the session, not just yielding focus transiently) - treat it the
+                // same as HostUiRequested so the host UI actually comes back instead of staying
+                // stuck showing a frozen last frame behind a transparent, now-stream-less window.
+                VideoEvent::HostUiRequested
             }
 
             // Phone granted/revoked video focus — nothing to do for passthrough.

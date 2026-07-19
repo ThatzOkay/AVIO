@@ -94,13 +94,20 @@ static void force_sinks_realtime(GstElement* pipeline) {
   gst_iterator_free(it);
 }
 
-// Rewrite a colorimetry the Pi 4 stateful v4l2 decoder rejects to one it accepts.
-static const char* kBadColorimetry = "1:4:5:1";
+// The Pi 4 stateful v4l2 decoder only accepts one specific colorimetry and rejects any other
+// value a phone's H.264 stream might declare (seen in practice: "1:4:5:1" and "2:4:16:3", the
+// latter's transfer=16 being SMPTE ST 2084/PQ HDR metadata a basic decoder won't recognize).
+// Since this is metadata only (doesn't affect actual pixel decoding), normalize anything that
+// isn't already the known-good value instead of matching specific bad ones.
 static const char* kGoodColorimetry = "1:4:7:1";
 
 static const char* caps_colorimetry(GstCaps* caps) {
   if (!caps || gst_caps_get_size(caps) == 0) return nullptr;
   return gst_structure_get_string(gst_caps_get_structure(caps, 0), "colorimetry");
+}
+
+static bool needs_colorimetry_fixup(const char* col) {
+  return col != nullptr && strcmp(col, kGoodColorimetry) != 0;
 }
 
 static GstPadProbeReturn colorimetry_query_probe(GstPad* pad, GstPadProbeInfo* info, gpointer) {
@@ -109,8 +116,7 @@ static GstPadProbeReturn colorimetry_query_probe(GstPad* pad, GstPadProbeInfo* i
   if (GST_QUERY_TYPE(q) == GST_QUERY_CAPS) {
     GstCaps* filter = nullptr;
     gst_query_parse_caps(q, &filter);
-    const char* col = caps_colorimetry(filter);
-    if (!col || strcmp(col, kBadColorimetry) != 0) return GST_PAD_PROBE_OK;
+    if (!needs_colorimetry_fixup(caps_colorimetry(filter))) return GST_PAD_PROBE_OK;
     GstCaps* tmpl = gst_pad_get_pad_template_caps(pad);
     GstCaps* res = gst_caps_intersect(tmpl, filter);
     gst_caps_unref(tmpl);
@@ -121,29 +127,27 @@ static GstPadProbeReturn colorimetry_query_probe(GstPad* pad, GstPadProbeInfo* i
   if (GST_QUERY_TYPE(q) == GST_QUERY_ACCEPT_CAPS) {
     GstCaps* caps = nullptr;
     gst_query_parse_accept_caps(q, &caps);
-    const char* col = caps_colorimetry(caps);
-    if (!col || strcmp(col, kBadColorimetry) != 0) return GST_PAD_PROBE_OK;
+    if (!needs_colorimetry_fixup(caps_colorimetry(caps))) return GST_PAD_PROBE_OK;
     gst_query_set_accept_caps_result(q, TRUE);
     return GST_PAD_PROBE_HANDLED;
   }
   return GST_PAD_PROBE_OK;
 }
 
-// Rewrite kBadColorimetry to kGoodColorimetry on the caps event the decoder sees. Metadata only.
+// Rewrite any non-good colorimetry to kGoodColorimetry on the caps event the decoder sees.
 static GstPadProbeReturn colorimetry_fixup_probe(GstPad*, GstPadProbeInfo* info, gpointer) {
   GstEvent* ev = GST_PAD_PROBE_INFO_EVENT(info);
   if (!ev || GST_EVENT_TYPE(ev) != GST_EVENT_CAPS) return GST_PAD_PROBE_OK;
   GstCaps* caps = nullptr;
   gst_event_parse_caps(ev, &caps);
   const char* col = caps_colorimetry(caps);
-  if (!col || strcmp(col, kBadColorimetry) != 0) return GST_PAD_PROBE_OK;
+  if (!needs_colorimetry_fixup(col)) return GST_PAD_PROBE_OK;
   GstCaps* nc = gst_caps_copy(caps);
   gst_caps_set_simple(nc, "colorimetry", G_TYPE_STRING, kGoodColorimetry, NULL);
   gst_event_unref(ev);
   GST_PAD_PROBE_INFO_DATA(info) = gst_event_new_caps(nc);
   gst_caps_unref(nc);
-  fprintf(stderr, "[gst_video] colorimetry %s -> %s (pi4 v4l2 decoder)\n",
-    kBadColorimetry, kGoodColorimetry);
+  fprintf(stderr, "[gst_video] colorimetry %s -> %s (pi4 v4l2 decoder)\n", col, kGoodColorimetry);
   return GST_PAD_PROBE_OK;
 }
 

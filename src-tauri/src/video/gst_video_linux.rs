@@ -42,13 +42,15 @@ impl CompositorControl {
             return;
         };
         for line in self.outbox.drain(..) {
-            if sock.write_all(line.as_bytes()).await.is_err() {
+            if let Err(e) = sock.write_all(line.as_bytes()).await {
+                eprintln!("[CompositorControl] write failed: {e}, will reconnect on next flush");
                 self.sock = None;
                 return;
             }
         }
         for line in self.state.values() {
-            if sock.write_all(line.as_bytes()).await.is_err() {
+            if let Err(e) = sock.write_all(line.as_bytes()).await {
+                eprintln!("[CompositorControl] write failed: {e}, will reconnect on next flush");
                 self.sock = None;
                 return;
             }
