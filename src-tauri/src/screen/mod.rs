@@ -1,4 +1,6 @@
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use brightness::Brightness;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use futures::TryStreamExt;
 
 #[tauri::command]
