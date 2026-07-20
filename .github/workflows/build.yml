@@ -305,7 +305,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: AVIO-linux-${{ matrix.arch }}-bundle
-          path: target/release/bundle/**/*
+          # Only the actual installer files - a recursive **/* glob here previously swept up
+          # the .deb package's own internal working files too (control.tar.gz, avio.desktop,
+          # avio.png, ...), which then collided by basename with the other arch's identically
+          # named internal files when release.yml uploaded everything to one GitHub release.
+          path: |
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
           if-no-files-found: error
 
       # ----------------------------
