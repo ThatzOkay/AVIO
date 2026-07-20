@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use evno::{Bus, Emit};
@@ -133,7 +134,7 @@ impl FMRadioService {
             }
             self.device_open = true;
             fm_set_sample_rate(SAMPLE_RATE).await;
-            fm_set_gain(300).await;
+            fm_set_gain(200).await;
         }
 
         fm_set_frequency(freq * 1000).await;
@@ -155,9 +156,13 @@ impl FMRadioService {
         // forwards the buffer over a channel, and a spawned task does the
         // actual (async) writing and RDS bookkeeping.
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<f32>>();
+        let send_failed_once = Arc::new(AtomicBool::new(false));
+        let send_failed_once_cb = send_failed_once.clone();
         if let Err(e) = fm_read(
             Box::new(move |buff: Vec<f32>| {
-                let _ = tx.send(buff);
+                if tx.send(buff).is_err() && !send_failed_once_cb.swap(true, Ordering::Relaxed) {
+                    eprintln!("FM audio channel send failed (receiver dropped)");
+                }
             }),
             OUTPUT_RATE,
         )
