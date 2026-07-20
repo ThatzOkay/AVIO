@@ -91,6 +91,13 @@ jobs:
           path: release-assets
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Raw .app bundle directories (tauri-action's own "-app" artifacts) aren't meant for
+      # distribution - the .dmg already packages them - and each one carries its own bundled
+      # GStreamer copy, so same-named internal files (e.g. gst-plugin-scanner) collide between
+      # the x64 and arm64 legs once every artifact's contents get flattened into one release.
+      - name: Drop raw .app bundles
+        run: find release-assets -type d -name "*.app" -prune -exec rm -rf {} +
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
