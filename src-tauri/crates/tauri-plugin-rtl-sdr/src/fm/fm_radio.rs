@@ -314,28 +314,32 @@ pub struct RdsInfo {
 
 // libm's atan2f (used internally by num_complex's Complex::arg) profiled as the FM demod
 // hot loop's dominant cost on a Pi 4 (2.048M calls/sec, full IEEE-accurate range reduction
-// and polynomial evaluation). The per-sample phase difference here is always small (FM
+// and polynomial evaluation). Every call here only ever needs a small-angle result (FM
 // broadcast deviation is ~±75kHz, so at a 2.048MHz input rate the max angle is only
 // ~0.23 rad), which is exactly the regime a cheap minimax polynomial approximation
-// handles well - max error here is ~0.0038 rad (~0.22 degrees), far below anything
-// audible after resampling/deemphasis. Standard technique, not a novel approximation.
+// handles well. Degree-7 odd-polynomial approximation of atan(a) for a in [0, 1] (reached
+// via the min/max ratio below), quadrant-corrected after - max error ~0.005 rad (~0.28
+// degrees), far below anything audible after resampling/deemphasis. Coefficients are the
+// well-known ones from https://math.stackexchange.com/questions/1098487.
 #[inline]
 fn fast_atan2(y: f32, x: f32) -> f32 {
-    const QUARTER_PI: f32 = std::f32::consts::FRAC_PI_4;
-    const THREE_QUARTER_PI: f32 = 3.0 * std::f32::consts::FRAC_PI_4;
-    let abs_y = y.abs() + 1e-10; // avoid an exact 0/0 at the origin
-    let angle = if x >= 0.0 {
-        let r = (x - abs_y) / (x + abs_y);
-        QUARTER_PI - QUARTER_PI * r
-    } else {
-        let r = (x + abs_y) / (abs_y - x);
-        THREE_QUARTER_PI - QUARTER_PI * r
-    };
-    if y < 0.0 {
-        -angle
-    } else {
-        angle
+    let x_abs = x.abs();
+    let y_abs = y.abs();
+    // Guards against an exact 0/0 (both samples zero) producing NaN, which would otherwise
+    // propagate silently through the rest of the demod chain.
+    let a = x_abs.min(y_abs) / (x_abs.max(y_abs) + 1e-20);
+    let s = a * a;
+    let mut result = ((-0.046_496_474_9 * s + 0.159_314_22) * s - 0.327_622_764) * s * a + a;
+    if y_abs > x_abs {
+        result = std::f32::consts::FRAC_PI_2 - result;
     }
+    if x < 0.0 {
+        result = std::f32::consts::PI - result;
+    }
+    if y < 0.0 {
+        result = -result;
+    }
+    result
 }
 
 struct FmDemod {
