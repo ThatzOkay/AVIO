@@ -249,8 +249,57 @@ jobs:
           # "failed to run linuxdeploy" unless the log level is above Error -
           # --verbose surfaces the actual underlying failure if this errors again.
           args: '--verbose'
-          uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
+          # Uploaded manually below instead, after the AppImage debug-cursor patch step -
+          # tauri-action has no after-bundle hook to patch it in before its own upload runs.
+          uploadWorkflowArtifacts: false
+
+      # AVIO_DEBUG_CURSOR defaults on (see avio-compositor.c) so a raw dev build always shows
+      # a real pointer for debugging touch/click positions - release AppImages should default
+      # it off instead. There's no Tauri after-bundle hook to inject this during the build
+      # itself, so patch the already-built AppImage's AppRun directly: wrap it so it exports
+      # AVIO_DEBUG_CURSOR=0 before exec'ing the original entrypoint, then repack.
+      - name: Patch AppImage debug-cursor default [linux]
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPIMAGETOOL_ARCH="${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}"
+          curl -fsSL -o /tmp/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${APPIMAGETOOL_ARCH}.AppImage"
+          chmod +x /tmp/appimagetool
+
+          shopt -s nullglob
+          for appimage in src-tauri/target/release/bundle/appimage/*.AppImage; do
+            echo "Patching AVIO_DEBUG_CURSOR default into $appimage"
+            workdir=$(mktemp -d)
+            cp "$appimage" "$workdir/orig.AppImage"
+            chmod +x "$workdir/orig.AppImage"
+            (cd "$workdir" && ./orig.AppImage --appimage-extract >/dev/null)
+
+            mv "$workdir/squashfs-root/AppRun" "$workdir/squashfs-root/AppRun.real"
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'export AVIO_DEBUG_CURSOR=0' \
+              'exec "$(dirname "$0")/AppRun.real" "$@"' \
+              > "$workdir/squashfs-root/AppRun"
+            chmod +x "$workdir/squashfs-root/AppRun"
+
+            rm -f "$appimage"
+            # --appimage-extract-and-run: GitHub-hosted runners don't reliably have FUSE, which
+            # a plain AppImage needs to run itself; this flag self-extracts instead.
+            ARCH="$APPIMAGETOOL_ARCH" /tmp/appimagetool --appimage-extract-and-run \
+              "$workdir/squashfs-root" "$appimage"
+            rm -rf "$workdir"
+          done
+
+      - name: Upload Linux bundles [linux]
+        if: matrix.os == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AVIO-linux-${{ matrix.arch }}-bundle
+          path: src-tauri/target/release/bundle/**/*
+          if-no-files-found: error
 
       # ----------------------------
       # macOS (arm64 native + x64 native on macos-15-intel)

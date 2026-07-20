@@ -161,6 +161,10 @@ struct tinywl_server {
 	bool full_restart;   // on shutdown, re-exec the whole compositor instead of exiting
 	struct wl_event_source *restart_timer;   // fallback if the inner UI doesn't exit on SIGTERM
 	char **argv;         // saved for the re-exec
+
+	// AVIO_DEBUG (default on; release builds' AppRun exports it 0) - shows a real pointer
+	// instead of the kiosk's normal hidden cursor, for visualizing touch/click positions.
+	bool debug;
 };
 
 struct tinywl_output {
@@ -503,9 +507,17 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 static void seat_request_cursor(struct wl_listener *listener, void *data) {
 	struct tinywl_server *server = wl_container_of(
 			listener, server, request_cursor);
-	(void)data;
-	// AVIO: touchscreen kiosk, no visible pointer wanted - ignore clients' own cursor images too.
-	wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+	if (!server->debug) {
+		// AVIO: touchscreen kiosk, no visible pointer wanted - ignore clients' own cursor
+		// images too.
+		wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+		return;
+	}
+	struct wlr_seat_pointer_request_set_cursor_event *event = data;
+	struct wlr_seat_client *focused_client = server->seat->pointer_state.focused_client;
+	if (focused_client == event->seat_client) {
+		wlr_cursor_set_surface(server->cursor, event->surface, event->hotspot_x, event->hotspot_y);
+	}
 }
 
 static void seat_pointer_focus_change(struct wl_listener *listener, void *data) {
@@ -655,8 +667,12 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	uint32_t dedges = 0;
 	deco_hit_test(server, server->cursor->x, server->cursor->y, &ds, &dedges);
 	if (ds != NULL) {
-		// AVIO: touchscreen kiosk, no visible pointer wanted.
-		wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+		// AVIO: touchscreen kiosk, no visible pointer wanted (unless AVIO_DEBUG_CURSOR).
+		if (server->debug) {
+			wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+		} else {
+			wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+		}
 		wlr_seat_pointer_clear_focus(server->seat);
 		return;
 	}
@@ -667,7 +683,11 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	struct tinywl_toplevel *toplevel = desktop_toplevel_at(server,
 			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 	if (!toplevel) {
-		wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+		if (server->debug) {
+			wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "default");
+		} else {
+			wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
+		}
 	}
 	if (surface) {
 		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
@@ -2061,6 +2081,10 @@ int main(int argc, char *argv[]) {
 
 	struct tinywl_server server = {0};
 
+	// Default on so a raw dev build always has it; release AppImages export it 0 via AppRun.
+	const char *debug_env = getenv("AVIO_DEBUG_CURSOR");
+	server.debug = !(debug_env && (strcmp(debug_env, "0") == 0 || strcmp(debug_env, "false") == 0));
+
 	char screens_buf[256];
 	const char *screens_env = getenv("AVIO_SCREENS");
 	snprintf(screens_buf, sizeof(screens_buf), "%s",
@@ -2156,6 +2180,7 @@ int main(int argc, char *argv[]) {
 	wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
 
 	server.cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
+	wlr_xcursor_manager_load(server.cursor_mgr, 1);
 
 	server.cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
 	server.cursor_motion.notify = server_cursor_motion;
