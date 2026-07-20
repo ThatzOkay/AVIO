@@ -5233,6 +5233,7 @@ dependencies = [
 name = "tauri-plugin-rtl-sdr"
 version = "0.1.0"
 dependencies = [
+ "biquad",
  "desperado",
  "fmradio",
  "num-complex",

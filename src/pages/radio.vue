@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useStatusStore } from "@/store/statusStore";
+import { useRouter } from "vue-router";
 
 definePage({
   meta: {
@@ -23,6 +25,9 @@ interface RadioState {
   station: StationInfo | null;
   favorites: number[] | null;
 }
+
+const statusStore = useStatusStore();
+const router = useRouter();
 
 const FAVORITE_SLOTS = 5;
 const LONG_PRESS_MS = 600;
@@ -129,6 +134,16 @@ watch(tab, (newTab, oldTab) => {
     invoke("stop").catch(() => {});
   }
 });
+
+watch(
+  () => statusStore.rtlSdrDetected,
+  (detected) => {
+    if (!detected) {
+      invoke("stop").catch(() => {});
+      router.push("/").catch(() => {});
+    }
+  },
+);
 
 onUnmounted(() => {
   invoke("stop").catch(() => {});
@@ -259,8 +274,8 @@ onUnmounted(() => {
         class="text-medium-emphasis text-body-small mt-3 mb-10"
         :class="{ 'controls-hidden': tab !== 'fm' }"
       >
-        <v-icon icon="mdi-star" size="x-small" class="mr-1" />tap to play,
-        hold to save
+        <v-icon icon="mdi-star" size="x-small" class="mr-1" />tap to play, hold
+        to save
       </div>
     </v-col>
   </v-row>

@@ -7,7 +7,9 @@
         style="position: unset"
         class="relative fill-width fill-height d-flex align-center justify-center"
       >
-        <v-card class="w-100 h-100 d-flex flex-column align-center justify-center">
+        <v-card
+          class="w-100 h-100 d-flex flex-column align-center justify-center"
+        >
           <router-view v-slot="{ Component }" class="inline">
             <transition :name="transitionName">
               <component :is="Component" />
@@ -138,13 +140,9 @@ html.show-video .v-application {
 
 <style scoped>
 .aa-video-layer {
-  position: absolute;
-  left: 0;
-  top: 87px;
-  width: 1671px;
-  height: 940px;
+  position: fixed;
+  inset: 0;
   touch-action: none;
-  border: 1px solid red; /* debug */
 }
 
 .v-main {

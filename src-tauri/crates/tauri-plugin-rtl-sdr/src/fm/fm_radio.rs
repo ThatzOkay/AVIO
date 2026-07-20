@@ -4,6 +4,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Q_BUTTERWORTH_F32, Type as BiquadType};
 use desperado::dsp::decimator::Decimator;
 use desperado::dsp::DspBlock;
 use fmradio::rds::{RdsDecoder, RdsResamplerCustom, StereoDecoderPLL};
@@ -313,6 +314,7 @@ pub struct RdsInfo {
 
 struct FmDemod {
     extractor: PhaseExtractor,
+    mono_lpf: DirectForm1<f32>,
     resampler: AdaptiveResampler,
     deemph: DeemphasisFilter,
     volume: f32,
@@ -336,6 +338,12 @@ impl FmDemod {
         rds
     }
 
+    // The composite MPX signal (mono included) carries a 19kHz stereo pilot tone and, above
+    // it, the 38kHz L-R subcarrier and 57kHz RDS subcarrier - none of which belong in mono
+    // program audio. The resampler's own anti-aliasing cutoff (~0.95 * output Nyquist, so
+    // ~22.8kHz at 48kHz out) sits above 19kHz and lets the pilot straight through unfiltered.
+    const MONO_AUDIO_CUTOFF_HZ: f32 = 15_000.0;
+
     fn new(input_rate: u32, output_rate: u32) -> Result<Self, Box<dyn std::error::Error>> {
         let ratio = output_rate as f64 / input_rate as f64;
         let resampler = AdaptiveResampler::new(ratio, 1, 1)?;
@@ -343,8 +351,17 @@ impl FmDemod {
         let decim_factor = ((input_rate as f32) / Self::FM_BANDWIDTH).round().max(1.0) as usize;
         let mpx_rate = input_rate as f32 / decim_factor as f32;
 
+        let mono_lpf_coeffs = Coefficients::<f32>::from_params(
+            BiquadType::LowPass,
+            Hertz::<f32>::from_hz(input_rate as f32).map_err(|e| format!("{e:?}"))?,
+            Hertz::<f32>::from_hz(Self::MONO_AUDIO_CUTOFF_HZ).map_err(|e| format!("{e:?}"))?,
+            Q_BUTTERWORTH_F32,
+        )
+        .map_err(|e| format!("{e:?}"))?;
+
         Ok(Self {
             extractor: PhaseExtractor::new(),
+            mono_lpf: DirectForm1::<f32>::new(mono_lpf_coeffs),
             resampler,
             deemph: DeemphasisFilter::new(output_rate as f32, 50e-6),
             volume: 10.0,
@@ -393,6 +410,7 @@ impl FmDemod {
         let mut mono = phase;
         for p in mono.iter_mut() {
             *p /= std::f32::consts::PI;
+            *p = self.mono_lpf.run(*p);
         }
 
         let resampled = self.resampler.process(&mono);

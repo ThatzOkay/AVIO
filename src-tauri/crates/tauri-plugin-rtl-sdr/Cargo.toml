@@ -15,4 +15,5 @@ tauri = { version = "2", features = [] }
 fmradio = "0.4.2"
 num-complex = "0.4"
 desperado = { version = "0.4.2", features = ["rtlsdr"] }
+biquad = "0.6"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }

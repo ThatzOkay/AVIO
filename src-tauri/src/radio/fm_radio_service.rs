@@ -133,7 +133,7 @@ impl FMRadioService {
             }
             self.device_open = true;
             fm_set_sample_rate(SAMPLE_RATE).await;
-            fm_set_gain(200).await;
+            fm_set_gain(300).await;
         }
 
         fm_set_frequency(freq * 1000).await;
