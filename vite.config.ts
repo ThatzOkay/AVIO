@@ -9,7 +9,14 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
-  plugins: [VueRouter(), vue(), vuetify({ autoImport: true })],
+  plugins: [
+    // Kiosk app with a handful of fixed pages - no benefit to per-route code splitting, and
+    // the default async chunk fetch is what makes page content visibly "pop in" after the
+    // slide transition already started (independent of hardware speed).
+    VueRouter({ importMode: "sync" }),
+    vue(),
+    vuetify({ autoImport: true }),
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

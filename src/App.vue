@@ -2,11 +2,19 @@
   <v-app>
     <TopBar />
     <v-main v-if="!androidAutoActive">
-      <router-view v-slot="{ Component }" class="inline">
-        <transition :name="transitionName">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+      <v-container
+        fluid
+        style="position: unset"
+        class="relative fill-width fill-height d-flex align-center justify-center"
+      >
+        <v-card class="w-100 h-100 d-flex flex-column align-center justify-center">
+          <router-view v-slot="{ Component }" class="inline">
+            <transition :name="transitionName">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </v-card>
+      </v-container>
     </v-main>
     <BottomBar v-if="!androidAutoActive" />
     <!-- While projecting, this replaces the app shell entirely: a transparent, full-viewport

@@ -23,7 +23,7 @@ const router = useRouter();
       <v-img :src="androidAutoIcon" width="64" height="64" contain />
     </v-btn>
 
-    <v-btn v-if="statusStore.rtlSdrDetected" value="/radio">
+    <v-btn value="/radio">
       <v-img :src="radioIcon" width="64" height="64" contain />
     </v-btn>
 
