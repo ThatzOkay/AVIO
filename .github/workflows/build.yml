@@ -270,7 +270,9 @@ jobs:
           chmod +x /tmp/appimagetool
 
           shopt -s nullglob
-          for appimage in src-tauri/target/release/bundle/appimage/*.AppImage; do
+          patched=0
+          for appimage in target/release/bundle/appimage/*.AppImage; do
+            patched=$((patched + 1))
             echo "Patching AVIO_DEBUG_CURSOR default into $appimage"
             workdir=$(mktemp -d)
             cp "$appimage" "$workdir/orig.AppImage"
@@ -293,12 +295,17 @@ jobs:
             rm -rf "$workdir"
           done
 
+          if [ "$patched" -eq 0 ]; then
+            echo "::error::No .AppImage found under target/release/bundle/appimage/ - nothing was patched" >&2
+            exit 1
+          fi
+
       - name: Upload Linux bundles [linux]
         if: matrix.os == 'linux'
         uses: actions/upload-artifact@v7
         with:
           name: AVIO-linux-${{ matrix.arch }}-bundle
-          path: src-tauri/target/release/bundle/**/*
+          path: target/release/bundle/**/*
           if-no-files-found: error
 
       # ----------------------------
