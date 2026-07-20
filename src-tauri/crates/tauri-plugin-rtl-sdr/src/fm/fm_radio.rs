@@ -4,7 +4,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
-use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Q_BUTTERWORTH_F32, Type as BiquadType};
+use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Type as BiquadType, Q_BUTTERWORTH_F32};
 use desperado::dsp::decimator::Decimator;
 use desperado::dsp::DspBlock;
 use fmradio::rds::{RdsDecoder, RdsResamplerCustom, StereoDecoderPLL};
@@ -293,7 +293,9 @@ pub async fn fm_read(
             // More in-flight buffers than librtlsdr's default (15) so this thread
             // can tolerate longer scheduling delays before libusb has to drop data.
             rtlsdr_read_async(dev, ffi_read_callback, ctx_ptr, 32, 0);
-            drop(Box::from_raw(ctx_ptr as *mut std::sync::mpsc::Sender<Vec<u8>>));
+            drop(Box::from_raw(
+                ctx_ptr as *mut std::sync::mpsc::Sender<Vec<u8>>,
+            ));
         }
     });
 
@@ -329,7 +331,7 @@ fn fast_atan2(y: f32, x: f32) -> f32 {
     // propagate silently through the rest of the demod chain.
     let a = x_abs.min(y_abs) / (x_abs.max(y_abs) + 1e-20);
     let s = a * a;
-    let mut result = ((-0.046_496_474_9 * s + 0.159_314_22) * s - 0.327_622_764) * s * a + a;
+    let mut result = ((-0.046_496_473 * s + 0.159_314_22) * s - 0.327_622_77) * s * a + a;
     if y_abs > x_abs {
         result = std::f32::consts::FRAC_PI_2 - result;
     }
