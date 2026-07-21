@@ -1,18 +1,35 @@
 name: diag
 on: workflow_dispatch
 jobs:
-  diag:
+  diag_no_workflows_perm:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Probe releases API
+      - name: Probe with SHA target, no workflows perm
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api -X POST repos/${{ github.repository }}/releases \
-            -f tag_name=diag-probe-tmp \
-            -f target_commitish=main \
+            -f tag_name=diag-probe-sha-nowf \
+            -f target_commitish=3f9c2d83eeaa3318f9bfb3175bf9841354c24608 \
+            -f name=diag \
+            -F draft=true \
+            --include 2>&1 || true
+
+  diag_with_workflows_perm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Probe with SHA target, with workflows perm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST repos/${{ github.repository }}/releases \
+            -f tag_name=diag-probe-sha-wf \
+            -f target_commitish=3f9c2d83eeaa3318f9bfb3175bf9841354c24608 \
             -f name=diag \
             -F draft=true \
             --include 2>&1 || true
