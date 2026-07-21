@@ -56,6 +56,30 @@ jobs:
                  -q .headSha)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
+      # GITHUB_TOKEN structurally cannot create a tag/ref pointing at an arbitrary commit SHA
+      # whose tree touches .github/workflows/* ("refusing to allow a GitHub App to create or
+      # update workflow ... without `workflows` permission") - this is a hard GitHub security
+      # restriction with no grantable `permissions:` YAML key, confirmed by direct testing.
+      # Targeting a branch NAME instead of a raw SHA sidesteps it, which is only safe when that
+      # branch's tip actually IS the commit being released - true for the common case (empty
+      # build_run_id = latest main build) but not for an explicitly older pinned build_run_id,
+      # which must fail loudly here rather than silently release the wrong commit.
+      - name: Resolve safe release target
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          SHA="${{ steps.sha.outputs.sha }}"
+          MAIN_SHA=$(gh api "repos/$REPO/commits/main" --jq .sha)
+
+          if [[ "$SHA" == "$MAIN_SHA" ]]; then
+            echo "target=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Selected build's commit ($SHA) is not the current tip of main ($MAIN_SHA). GITHUB_TOKEN cannot tag an older commit whose tree touches .github/workflows/* - releasing a pinned older build_run_id needs a PAT with repo+workflow scope instead of the default token."
+            exit 1
+          fi
+
       - uses: actions/checkout@v6
         with:
           submodules: recursive
@@ -221,7 +245,7 @@ jobs:
           args=(
             "$TAG"
             --repo "$REPO"
-            --target "${{ steps.sha.outputs.sha }}"
+            --target "${{ steps.target.outputs.target }}"
             --title "v${VERSION} (${REL_DATE})"
             --notes "## Release Notes – v${VERSION}
 
