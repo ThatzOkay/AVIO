@@ -1,7 +1,7 @@
 name: diag
 on: workflow_dispatch
 jobs:
-  diag_no_target:
+  diag_pretagged:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -10,23 +10,11 @@ jobs:
         with:
           ref: 3f9c2d83eeaa3318f9bfb3175bf9841354c24608
           fetch-depth: 1
-      - name: gh release create without --target
+      - name: Push tag then create release from it
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create diag-probe-notarget --repo ${{ github.repository }} --draft --title diag --notes diag 2>&1 || true
-
-  diag_with_target:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 3f9c2d83eeaa3318f9bfb3175bf9841354c24608
-          fetch-depth: 1
-      - name: gh release create with --target SHA (matches real workflow)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create diag-probe-withtarget --repo ${{ github.repository }} --target 3f9c2d83eeaa3318f9bfb3175bf9841354c24608 --draft --title diag --notes diag 2>&1 || true
+          set -x
+          git tag diag-probe-pretagged 3f9c2d83eeaa3318f9bfb3175bf9841354c24608
+          git push origin diag-probe-pretagged
+          gh release create diag-probe-pretagged --repo ${{ github.repository }} --draft --title diag --notes diag 2>&1 || true
