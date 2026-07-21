@@ -433,6 +433,20 @@ jobs:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
 
+      # The macOS updater artifact is a separate .app.tar.gz (not the .dmg) - see
+      # https://v2.tauri.app/plugin/updater/. tauri-action's uploadWorkflowArtifacts only
+      # grabs the dmg/app bundle formats, not this one plus its .sig, so both need an
+      # explicit upload or the updater manifest has nothing to link to for macOS.
+      - name: Upload macOS updater artifacts [macos]
+        if: matrix.os == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          name: AVIO-macos-${{ matrix.arch }}-updater
+          path: |
+            target/release/bundle/macos/*.app.tar.gz
+            target/release/bundle/macos/*.app.tar.gz.sig
+          if-no-files-found: error
+
       # ----------------------------
       # Windows x64
       # ----------------------------
@@ -546,6 +560,19 @@ jobs:
           args: '--target x86_64-pc-windows-gnu'
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
+
+      # tauri-action's uploadWorkflowArtifacts only grabs the primary installer per bundle
+      # format (msi/exe) - it does not sweep up the sibling `.sig` files createUpdaterArtifacts
+      # writes next to them, so the updater manifest has no signature to reference without this.
+      - name: Upload Windows updater signatures [windows]
+        if: matrix.os == 'windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: AVIO-windows-${{ matrix.arch }}-updater-sig
+          path: |
+            target/x86_64-pc-windows-gnu/release/bundle/msi/*.msi.sig
+            target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe.sig
+          if-no-files-found: error
 
       # ----------------------------
       # Badges (single representative leg, same as before)
