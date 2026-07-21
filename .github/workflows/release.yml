@@ -17,11 +17,8 @@ jobs:
     permissions:
       contents: write
       actions: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
 
     steps:
       - name: Pick build run ID
@@ -200,14 +197,16 @@ jobs:
           console.log('platforms:', Object.keys(platforms));
           NODE
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+      # Handed off to the deploy_manifest job rather than deploying to Pages here directly -
+      # the environment/OIDC permissions actions/deploy-pages needs (pages: write, id-token:
+      # write, environment: github-pages) scope down the job's GITHUB_TOKEN in a way that broke
+      # the "Create GitHub release" API call below (403) when both lived in the same job.
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v7
         with:
-          path: pages-dist
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          name: updater-manifest
+          path: pages-dist/latest.json
+          retention-days: 1
 
       - name: Create GitHub release
         env:
@@ -244,3 +243,28 @@ jobs:
           done < <(find release-assets -type f -not -name "latest.json" -print0)
 
           gh release create "${args[@]}"
+
+  deploy_manifest:
+    needs: create_release
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download manifest artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: updater-manifest
+          path: pages-dist
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: pages-dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
