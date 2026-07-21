@@ -38,6 +38,7 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
 import { computed, onBeforeMount, onMounted, ref, watch } from "vue";
 import { useStatusStore } from "./store/statusStore";
 import BottomBar from "./components/BottomBar.vue";
@@ -123,6 +124,20 @@ onMounted(() => {
   console.log(
     `Window view width: ${windowViewWidth}, height: ${windowViewHeight}, scale factor: ${scaleFactor}`,
   );
+
+  // Download/install UI (notification pull-down) comes later — for now this just proves the
+  // check itself works end to end against the published latest.json.
+  check()
+    .then((update) => {
+      if (update) {
+        console.log(`Update available: ${update.currentVersion} -> ${update.version}`);
+      } else {
+        console.log("No update available");
+      }
+    })
+    .catch((e) => {
+      console.error("Update check failed:", e);
+    });
 });
 </script>
 

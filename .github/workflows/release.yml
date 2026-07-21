@@ -17,6 +17,11 @@ jobs:
     permissions:
       contents: write
       actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Pick build run ID
@@ -98,6 +103,98 @@ jobs:
       - name: Drop raw .app bundles
         run: find release-assets -type d -name "*.app" -prune -exec rm -rf {} +
 
+      # Each matrix leg's own updater .sig only knows about its own platform, so there's no
+      # single leg with the full picture - assemble one combined manifest here instead of
+      # trusting any per-leg latest.json (which would also collide on the same filename once
+      # every artifact's contents get flattened into the release, same class of bug as the
+      # .app collision above). Only the well-documented bundler-side `.sig` naming convention
+      # (<bundle>.sig, written by createUpdaterArtifacts) is relied on - see
+      # https://v2.tauri.app/plugin/updater/ for the per-platform artifact names.
+      - name: Build combined updater manifest
+        id: manifest
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p pages-dist
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const repo = process.env.REPO;
+          const version = process.env.VERSION;
+          const root = 'release-assets';
+
+          const archOf = (p) => {
+            if (/arm64|aarch64/i.test(p)) return 'aarch64';
+            if (/x64|x86_64|amd64/i.test(p)) return 'x86_64';
+            return null;
+          };
+
+          const osOf = (bundleName) => {
+            if (bundleName.endsWith('.AppImage')) return 'linux';
+            if (bundleName.endsWith('.app.tar.gz')) return 'darwin';
+            if (bundleName.endsWith('.msi') || bundleName.endsWith('.exe')) return 'windows';
+            return null;
+          };
+
+          const walk = (dir) => {
+            let out = [];
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, entry.name);
+              if (entry.isDirectory()) out = out.concat(walk(p));
+              else if (entry.name.endsWith('.sig')) out.push(p);
+            }
+            return out;
+          };
+
+          const platforms = {};
+          for (const sigPath of walk(root)) {
+            const bundlePath = sigPath.slice(0, -'.sig'.length);
+            const bundleName = path.basename(bundlePath);
+            const os = osOf(bundleName);
+            const arch = archOf(sigPath);
+            if (!os || !arch) {
+              console.log(`Skipping unrecognized updater artifact: ${sigPath}`);
+              continue;
+            }
+            const key = `${os}-${arch}`;
+            // Windows builds both .msi and .exe (nsis) for the same platform key - prefer msi.
+            if (platforms[key] && bundleName.endsWith('.exe')) continue;
+
+            platforms[key] = {
+              signature: fs.readFileSync(sigPath, 'utf8').trim(),
+              url: `https://github.com/${repo}/releases/download/v${version}/${bundleName}`,
+            };
+          }
+
+          if (Object.keys(platforms).length === 0) {
+            console.error('No updater artifacts (.sig files) found under release-assets/');
+            process.exit(1);
+          }
+
+          const manifest = {
+            version,
+            notes: `See https://github.com/${repo}/releases/tag/v${version}`,
+            pub_date: new Date().toISOString(),
+            platforms,
+          };
+
+          fs.writeFileSync('pages-dist/latest.json', JSON.stringify(manifest, null, 2));
+          console.log('platforms:', Object.keys(platforms));
+          NODE
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: pages-dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,6 +227,6 @@ jobs:
 
           while IFS= read -r -d '' file; do
             args+=("$file")
-          done < <(find release-assets -type f -print0)
+          done < <(find release-assets -type f -not -name "latest.json" -print0)
 
           gh release create "${args[@]}"

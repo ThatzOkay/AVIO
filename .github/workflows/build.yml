@@ -113,6 +113,7 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.is_empty != 'true' }}
     runs-on: ${{ matrix.runner }}
+    environment: release
     env:
       BUILD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
 
@@ -244,6 +245,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # tauri-bundler swallows linuxdeploy's real stderr and reports just
           # "failed to run linuxdeploy" unless the log level is above Error -
@@ -300,12 +303,30 @@ jobs:
             exit 1
           fi
 
+      # The patch step above repacks the AppImage, which invalidates the .sig that
+      # `createUpdaterArtifacts` wrote for the ORIGINAL (pre-patch) bytes - the updater would
+      # reject the shipped AppImage as tampered otherwise. Re-sign the patched file in place.
+      - name: Re-sign patched AppImage [linux]
+        if: success() && matrix.os == 'linux'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for appimage in target/release/bundle/appimage/*.AppImage; do
+            bunx tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$appimage"
+          done
+
       - name: Upload Linux AppImage [linux]
         if: matrix.os == 'linux'
         uses: actions/upload-artifact@v7
         with:
           name: AVIO-linux-${{ matrix.arch }}-appimage
-          path: target/release/bundle/appimage/*.AppImage
+          path: |
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
           if-no-files-found: error
 
       - name: Upload Linux deb [linux]
@@ -406,6 +427,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'AVIO-[version]-[platform]-[arch]-[bundle]'
@@ -512,6 +535,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # librtlsdr.dll re-exports its own statically-linked pthread_*
           # symbols, colliding with MinGW's libpthread.a at link time.
           RUSTFLAGS: '-C link-arg=-Wl,--allow-multiple-definition'

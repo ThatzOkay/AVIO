@@ -41,7 +41,7 @@ onMounted(async () => {
   });
 
   await invoke<number>("get_current_volume").then((volume: number) => {
-    currentVolume.value = volume;
+    currentVolume.value = volume * 0.65;
   });
 
   await invoke<number>("get_current_brightness").then((brightness: number) => {
@@ -51,7 +51,8 @@ onMounted(async () => {
 });
 
 watch(currentVolume, (newVolume) => {
-  updateVolume(newVolume);
+  const actualVolume = Math.round(newVolume * 0.65);
+  updateVolume(actualVolume);
 });
 
 watch(currentBrightness, (newBrightness) => {
@@ -150,6 +151,8 @@ const updateBrightness = async (brightness: number) => {
             <p>{{ defaultDeviceName }}</p>
             <v-slider
               v-model="currentVolume"
+              :min="0"
+              :max="100"
               prepend-icon="mdi-volume-high"
             ></v-slider>
           </sliding-card>

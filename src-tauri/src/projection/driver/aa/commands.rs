@@ -65,7 +65,9 @@ pub async fn aa_resume(handle: State<'_, Arc<AaSessionHandle>>) -> Result<(), St
         })
         .await;
     let reached_session = handle.send(SessionCommand::RequestVideoFocus).await;
-    println!("[AA resume] HOME + RequestVideoFocus sent, reached a live session: {reached_session}");
+    println!(
+        "[AA resume] HOME + RequestVideoFocus sent, reached a live session: {reached_session}"
+    );
     Ok(())
 }
 
@@ -77,9 +79,9 @@ pub async fn aa_resume(handle: State<'_, Arc<AaSessionHandle>>) -> Result<(), St
 /// wherever Vuetify's own CSS doesn't happen to paint something explicit.
 #[tauri::command]
 pub fn aa_set_main_transparent(app: AppHandle, transparent: bool) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("no \"main\" window")?;
+    let window = app.get_webview_window("main").ok_or("no \"main\" window")?;
     let color = transparent.then_some(tauri::window::Color(0, 0, 0, 0));
-    window.set_background_color(color).map_err(|e| e.to_string())
+    window
+        .set_background_color(color)
+        .map_err(|e| e.to_string())
 }

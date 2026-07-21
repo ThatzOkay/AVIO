@@ -25,9 +25,18 @@
     "enableGTKAppId": true,
     "macOSPrivateApi": true
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2NzUzMTRFNTIzOUVCRTkKUldUcDZ6bFNUakYxMW9VTXhYVHJuaVVmSGdqTGpWSm1Nb3lHZFREbHRBbUo3OU40eHJvZG5LbUcK",
+      "endpoints": [
+        "https://thatzokay.github.io/AVIO/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": [
       "binaries/gst-host"
     ],

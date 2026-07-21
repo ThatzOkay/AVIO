@@ -110,9 +110,7 @@ impl GstHost {
         if let Some(gst_root) = resolve_gstreamer_root(app) {
             command.envs(gst_env(&gst_root));
         } else {
-            eprintln!(
-                "[GstHost] bundled GStreamer not found; falling back to system plugin paths"
-            );
+            eprintln!("[GstHost] bundled GStreamer not found; falling back to system plugin paths");
         }
         command
             .env("GST_GL_WINDOW", "surfaceless")
