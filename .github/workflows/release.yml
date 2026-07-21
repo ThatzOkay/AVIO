@@ -103,6 +103,20 @@ jobs:
       - name: Drop raw .app bundles
         run: find release-assets -type d -name "*.app" -prune -exec rm -rf {} +
 
+      # Unlike the .dmg, macOS's updater bundle (avio.app.tar.gz/.sig) has no arch in its
+      # filename, so the arm64 and x64 legs collide once flattened into one release - same
+      # class of bug as the .app bundle collision above. Disambiguate using the arch already
+      # encoded in the artifact's own directory name (AVIO-macos-<arch>-updater).
+      - name: Disambiguate macOS updater artifact filenames
+        run: |
+          set -euo pipefail
+          for dir in release-assets/AVIO-macos-*-updater; do
+            [ -d "$dir" ] || continue
+            arch=$(basename "$dir" | sed -E 's/^AVIO-macos-(.+)-updater$/\1/')
+            [ -f "$dir/avio.app.tar.gz" ] && mv "$dir/avio.app.tar.gz" "$dir/avio_${arch}.app.tar.gz"
+            [ -f "$dir/avio.app.tar.gz.sig" ] && mv "$dir/avio.app.tar.gz.sig" "$dir/avio_${arch}.app.tar.gz.sig"
+          done
+
       # Each matrix leg's own updater .sig only knows about its own platform, so there's no
       # single leg with the full picture - assemble one combined manifest here instead of
       # trusting any per-leg latest.json (which would also collide on the same filename once
