@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
 
       - name: Setup latest Node.js 24.x
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
