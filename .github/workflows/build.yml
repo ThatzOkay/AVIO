@@ -186,7 +186,7 @@ jobs:
           fi
 
       - name: Cache bun store
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-store-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('bun.lock') }}
@@ -202,7 +202,7 @@ jobs:
       # Point apt at a runner-owned dir instead so caching needs no root.
       - name: Cache apt packages [linux]
         if: matrix.os == 'linux'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/apt-archives/*.deb
           key: apt-${{ matrix.arch }}-${{ hashFiles('.github/apt-packages-linux.txt') }}
@@ -382,7 +382,7 @@ jobs:
       - name: Cache GStreamer pkgs [macos]
         id: gstcache_mac
         if: matrix.os == 'macos'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             gst-runtime.pkg
@@ -472,7 +472,7 @@ jobs:
       - name: Cache GStreamer installer [windows]
         id: gstcache_win
         if: matrix.os == 'windows'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: gstreamer-mingw-x86_64.exe
           key: gst-exe-windows-mingw-x86_64-${{ steps.gstver_win.outputs.version }}
