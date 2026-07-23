@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-prost-build = "0.13"
+prost-build = "0.14"
 
 [dependencies]
-prost = "0.13"
+prost = "0.14"

@@ -38,7 +38,7 @@ welle-io-sys = { path = "crates/welle-io-sys" }
 tauri-plugin-store = "2"
 gst-video = { path = "crates/gst-video" }
 aa-proto = { path = "crates/aa-proto" }
-prost = "0.13"
+prost = "0.14"
 openssl = { version = "0.10", features = ["vendored"] }
 cpvc = "0.6.0"
 tauri-plugin-os = "2"
