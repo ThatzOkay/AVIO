@@ -1,0 +1,17 @@
+{
+  "name": "avio-dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "runArgs": [
+    "--privileged",
+    "--device=/dev/dri/renderD128",
+    "-e", "XDG_RUNTIME_DIR=/tmp/xdg-runtime",
+    "-e", "WLR_BACKENDS=headless",
+    "-e", "WLR_LIBINPUT_NO_DEVICES=1"
+  ],
+  "mounts": [
+    "source=/dev/bus/usb,target=/dev/bus/usb,type=bind"
+  ]
+}

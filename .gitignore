@@ -1,0 +1,32 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# gst-host sidecar binary, rebuilt by scripts/build-gst-host-sidecar.ts before dev/build
+src-tauri/binaries
+
+# avio-compositor bundle, rebuilt by scripts/build-avio-compositor-sidecar.ts before dev/build
+src-tauri/compositor
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+target

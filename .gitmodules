@@ -1,0 +1,3 @@
+[submodule "src-tauri/crates/welle-io-sys/vendor/welle.io"]
+	path = src-tauri/crates/welle-io-sys/vendor/welle.io
+	url = https://github.com/AlbrechtL/welle.io.git

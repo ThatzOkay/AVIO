@@ -1,0 +1,51 @@
+[package]
+name = "avio"
+version = "0.1.0-2"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "avio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+regex = "1"
+regex-split = "0.1.0"
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-opener = "2"
+raw-window-handle = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+fmradio = "0.4.2"
+nusb = { version = "0.2.4", features = ["tokio"] }
+futures-lite = "2.6.1"
+whoami = "2.1.2"
+evno = "1"
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-rtl-sdr = { path = "crates/tauri-plugin-rtl-sdr" }
+welle-io-sys = { path = "crates/welle-io-sys" }
+tauri-plugin-store = "2"
+gst-video = { path = "crates/gst-video" }
+aa-proto = { path = "crates/aa-proto" }
+prost = "0.14"
+openssl = { version = "0.10", features = ["vendored"] }
+cpvc = "0.6.0"
+tauri-plugin-os = "2"
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+brightness = "0.8"
+futures = "0.3"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"

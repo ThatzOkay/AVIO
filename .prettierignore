@@ -1,0 +1,5 @@
+# Biome owns .ts formatting; Prettier here is scoped to .vue SFCs only
+# (Biome has no Vue support).
+*
+!*/
+!**/*.vue
