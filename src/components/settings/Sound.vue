@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed } from "vue";
 import { useSettingsStore } from "@/store/settingsStore";
 
 const settingsStore = useSettingsStore();
@@ -136,12 +136,6 @@ const isDefaultDevice = (deviceName: string) => {
 const isDefaultInputDevice = (deviceName: string) => {
   return deviceName === settingsStore.defaultInputDevice;
 };
-
-// onMounted(async () => {
-//   watch(currentVolume, (newVolume) => {
-//     settingsStore.setMasterVolume(newVolume);
-//   });
-// });
 
 const setDefaultDevice = async (deviceName: string) => {
   settingsStore.setDefaultSoundDevice(deviceName);

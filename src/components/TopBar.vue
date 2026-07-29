@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeMount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeMount, onMounted, ref } from "vue";
 import SlidingCard from "./SlidingCard.vue";
 import { useRouter } from "vue-router";
 import { platform } from "@tauri-apps/plugin-os";
@@ -47,13 +47,6 @@ onBeforeMount(() => {
 
 onMounted(async () => {
   setInterval(setDate, 1000);
-
-  // watch(currentVolume, (newVolume) => {
-  //   settingsStore.setMasterVolume(newVolume);
-  // });
-  // watch(currentBrightness, (newBrightness) => {
-  //   settingsStore.setBrightness(newBrightness);
-  // });
 });
 </script>
 

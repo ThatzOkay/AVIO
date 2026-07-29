@@ -69,7 +69,7 @@
           class="py-3 mx-2 rounded-lg"
           style="height: 72px"
           slim
-          @click="setTheme('m3dark')"
+          @click="settingsStore.setTheme('m3dark')"
         >
           <template #prepend>
             <v-icon icon="mdi-weather-night" color="primary" size="24" />
@@ -96,7 +96,7 @@
           class="py-3 mx-2 rounded-lg"
           style="height: 72px"
           slim
-          @click="setTheme('m3light')"
+          @click="settingsStore.setTheme('m3light')"
         >
           <template #prepend>
             <v-icon icon="mdi-white-balance-sunny" color="primary" size="24" />
@@ -123,8 +123,7 @@
 
 <script setup lang="ts">
 import { useSettingsStore } from "@/store/settingsStore";
-import { invoke } from "@tauri-apps/api/core";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed } from "vue";
 import { useTheme } from "vuetify";
 
 const settingsStore = useSettingsStore();
@@ -143,42 +142,6 @@ const currentScale = computed({
     settingsStore.setScale(value);
   },
 });
-
-// onMounted(async () => {
-//   const current = await invoke<number>("get_current_brightness");
-
-//   currentBrightness.value = current;
-
-//   watch(currentBrightness, (newBrightness) => {
-//     updateBrightness(newBrightness);
-//   });
-// });
-
-// watch(currentScale, (newScale) => {
-//   updateScale(newScale);
-// });
-
-// const updateBrightness = async (brightness: number) => {
-//   await invoke("set_brightness", { value: Number(brightness.toFixed(0)) });
-// };
-
-// const updateScale = async (scale: number) => {
-//   const actualScale = 1 + scale / 100; // 0=1.0, 100=2.0
-
-//   document.body.style.transform = `scale(${actualScale})`;
-//   document.body.style.transformOrigin = "top left";
-
-//   document.body.style.width = `${100 / actualScale}%`;
-//   document.body.style.height = `${100 / actualScale}%`;
-// };
-
-// const setTheme = async (themeName: string) => {
-//   if (themeName === "m3dark") {
-//     theme.global.name.value = "m3dark";
-//   } else {
-//     theme.global.name.value = "m3light";
-//   }
-// };
 </script>
 
 <style scoped>

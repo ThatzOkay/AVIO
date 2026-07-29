@@ -31,6 +31,10 @@
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+      @touchcancel="onTouchEnd"
     />
   </v-app>
 </template>
@@ -70,6 +74,22 @@ const sendPointer = (event: PointerEvent, phase: "down" | "move" | "up") => {
   const x = event.clientX / window.innerWidth;
   const y = event.clientY / window.innerHeight;
   void invoke("aa_send_pointer", { x, y, phase });
+};
+
+const onTouchStart = (event: TouchEvent) => {
+  touchActive.value = true;
+  sendTouch(event, "down");
+};
+
+const onTouchMove = (event: TouchEvent) => {
+  if (!touchActive.value) return;
+  sendTouch(event, "move");
+};
+
+const onTouchEnd = (event: TouchEvent) => {
+  if (!touchActive.value) return;
+  touchActive.value = false;
+  sendTouch(event, "up");
 };
 
 const onPointerDown = (event: PointerEvent) => {
