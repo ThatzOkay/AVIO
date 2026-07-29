@@ -18,7 +18,7 @@ const resumeAndroidAuto = () => {
 <template>
   <div class="w-100 h-100 d-flex flex-column align-center justify-center">
     <v-btn
-      v-if="statusStore.aaStatus === 'host-ui'"
+      v-if="statusStore.aaStatus.status === 'host-ui'"
       size="x-large"
       color="primary"
       rounded="xl"

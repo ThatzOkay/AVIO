@@ -18,11 +18,11 @@ pub enum RadioMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RadioState {
-    running: bool,
-    frequency: u32,
-    mode: RadioMode,
-    station: Option<StationInfo>,
-    favorites: Option<Vec<u32>>,
+    pub running: bool,
+    pub frequency: u32,
+    pub mode: RadioMode,
+    pub station: Option<StationInfo>,
+    pub favorites: Option<Vec<u32>>,
 }
 
 pub struct RadioService {

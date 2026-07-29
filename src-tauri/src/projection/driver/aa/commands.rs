@@ -16,7 +16,7 @@ const TOUCH_H: f64 = 720.0;
 /// `x`/`y` are normalised 0..1 coordinates within the rendered video area. `phase` is
 /// "down"/"move"/"up".
 #[tauri::command]
-pub async fn aa_send_touch(
+pub async fn aa_send_pointer(
     handle: State<'_, Arc<AaSessionHandle>>,
     x: f64,
     y: f64,
@@ -38,6 +38,38 @@ pub async fn aa_send_touch(
             y: py,
         })
         .await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn aa_send_touch(
+    handle: State<'_, Arc<AaSessionHandle>>,
+    touches: Vec<(f64, f64)>,
+    phase: String,
+) -> Result<(), String> {
+    let action = match phase.as_str() {
+        "down" => touch_action::DOWN,
+        "move" => touch_action::MOVED,
+        "up" => touch_action::UP,
+        other => return Err(format!("unknown touch phase: {other}")),
+    };
+
+    let touch_points: Vec<(u32, u32)> = touches
+        .into_iter()
+        .map(|(x, y)| {
+            let px = (x.clamp(0.0, 1.0) * TOUCH_W).round() as u32;
+            let py = (y.clamp(0.0, 1.0) * TOUCH_H).round() as u32;
+            (px, py)
+        })
+        .collect();
+
+    handle
+        .send(SessionCommand::MultiTouch {
+            action,
+            points: touch_points,
+        })
+        .await;
+
     Ok(())
 }
 

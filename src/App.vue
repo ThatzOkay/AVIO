@@ -1,6 +1,6 @@
 <template>
   <v-app>
-    <TopBar />
+    <TopBar v-if="!androidAutoActive" />
     <v-main v-if="!androidAutoActive">
       <v-container
         fluid
@@ -40,40 +40,52 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { computed, onBeforeMount, onMounted, ref, watch } from "vue";
-import { useStatusStore } from "./store/statusStore";
+import { AaStatus, useStatusStore } from "./store/statusStore";
 import BottomBar from "./components/BottomBar.vue";
 import TopBar from "./components/TopBar.vue";
 import { useRouter } from "vue-router";
+import { useSettingsStore } from "./store/settingsStore.ts";
 
+const settingsStore = useSettingsStore();
 const statusStore = useStatusStore();
 const router = useRouter();
 
 // Hidden only while actively projecting video. "host-ui" (phone kicked back to its home
 // screen) shows the sidebar again alongside the resume button.
-const androidAutoActive = computed(() => statusStore.aaStatus === "connected");
+const androidAutoActive = computed(
+  () => statusStore.aaStatus.status === "connected",
+);
 
 const touchActive = ref(false);
 
-const sendTouch = (event: PointerEvent, phase: "down" | "move" | "up") => {
+const sendTouch = (event: TouchEvent, phase: "down" | "move" | "up") => {
+  const touches = Array.from(event.touches).map((t) => ({
+    x: t.clientX / window.innerWidth,
+    y: t.clientY / window.innerHeight,
+  }));
+  void invoke("aa_send_touch", { touches, phase });
+};
+
+const sendPointer = (event: PointerEvent, phase: "down" | "move" | "up") => {
   const x = event.clientX / window.innerWidth;
   const y = event.clientY / window.innerHeight;
-  void invoke("aa_send_touch", { x, y, phase });
+  void invoke("aa_send_pointer", { x, y, phase });
 };
 
 const onPointerDown = (event: PointerEvent) => {
   touchActive.value = true;
-  sendTouch(event, "down");
+  sendPointer(event, "down");
 };
 
 const onPointerMove = (event: PointerEvent) => {
   if (!touchActive.value) return;
-  sendTouch(event, "move");
+  sendPointer(event, "move");
 };
 
 const onPointerUp = (event: PointerEvent) => {
   if (!touchActive.value) return;
   touchActive.value = false;
-  sendTouch(event, "up");
+  sendPointer(event, "up");
 };
 
 // The main window can go transparent (tauri.conf.json enables the capability) so that when the
@@ -105,18 +117,21 @@ onBeforeMount(async () => {
   statusStore.setRtlSdrDetected(rtlSdrDetected);
 
   listen("usb-event", async () => {
+    settingsStore.initDevices();
+
     const rtlSdrDetected = await invoke<boolean>(
       "plugin:rtl-sdr|detect_rtl_sdr",
     );
     statusStore.setRtlSdrDetected(rtlSdrDetected);
   });
 
-  listen<"disconnected" | "connected" | "host-ui">("aa-status", (event) => {
+  listen<AaStatus>("aa-status", (event) => {
     statusStore.setAaStatus(event.payload);
   });
 });
 
 onMounted(() => {
+  settingsStore.init();
   const windowViewWidth = window.innerWidth;
   const windowViewHeight = window.innerHeight;
   const scaleFactor = window.devicePixelRatio;
@@ -130,7 +145,9 @@ onMounted(() => {
   check()
     .then((update) => {
       if (update) {
-        console.log(`Update available: ${update.currentVersion} -> ${update.version}`);
+        console.log(
+          `Update available: ${update.currentVersion} -> ${update.version}`,
+        );
       } else {
         console.log("No update available");
       }
@@ -171,6 +188,10 @@ html.show-video .v-application {
   left: 0;
   width: 100%;
 }
+
+/* :deep(.v-list-item__prepend) {
+  width: 35px !important;
+} */
 
 .slide-left-enter-active,
 .slide-right-leave-active {

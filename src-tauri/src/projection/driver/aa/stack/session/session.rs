@@ -32,7 +32,8 @@ use super::super::channels::mic_channel::{MicChannel, MicEvent};
 use super::super::channels::navigation_channel::{self, NavEvent};
 use super::super::channels::video_channel::{VideoChannel, VideoEvent};
 use super::super::constants::{
-    av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version, STATUS_OK,
+    av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version,
+    STATUS_OK,
 };
 use super::super::crypto::tls_engine::TlsEngine;
 use super::super::frame::codec::{encode_frame, FrameParser, RawFrame};
@@ -57,6 +58,9 @@ pub enum SessionEvent {
     Connected,
     Disconnected,
     Error(String),
+    /// Phone's self-reported name, arrives with the `ServiceDiscoveryRequest` — before
+    /// `Connected` (which only fires once AV channel setup completes).
+    DeviceInfo { device_name: Option<String> },
     /// Encoded video access unit ready for the decoder. `channel_id` is `ch::VIDEO` or
     /// `ch::CLUSTER_VIDEO`; `codec` is whichever of H264/H265/VP9/AV1 was negotiated for it.
     VideoFrame {
@@ -109,6 +113,11 @@ pub enum SessionEvent {
 pub enum SessionCommand {
     /// Single-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
     Touch { action: u32, x: u32, y: u32 },
+    /// Multi-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
+    MultiTouch {
+        action: u32,
+        points: Vec<(u32, u32)>,
+    },
     /// HW button/key event (see `Session::send_button`).
     Button {
         key_codes: Vec<u32>,
@@ -258,6 +267,10 @@ impl Session {
                     let result = match command {
                         SessionCommand::Touch { action, x, y } => {
                             self.send_touch(action, &[TouchPointer { x, y, id: 0 }], 0).await
+                        }
+                        SessionCommand::MultiTouch { action, points } => {
+                            let pointers: Vec<TouchPointer> = points.into_iter().enumerate().map(|(i, (x, y))| TouchPointer { x, y, id: i as u32 }).collect();
+                            self.send_touch(action, &pointers, 0).await
                         }
                         SessionCommand::Button { key_codes, down, longpress } => {
                             self.send_button(&key_codes, down, longpress).await
@@ -817,7 +830,10 @@ impl Session {
         events: &mpsc::UnboundedSender<SessionEvent>,
     ) -> std::io::Result<()> {
         match event {
-            ControlEvent::ServiceDiscoveryRequest(_req) => {
+            ControlEvent::ServiceDiscoveryRequest(req) => {
+                let _ = events.send(SessionEvent::DeviceInfo {
+                    device_name: req.device_name,
+                });
                 let sdr = build_service_discovery_response(&self.cfg);
                 self.video_codec_by_index = sdr.video_codec_by_index;
                 self.cluster_codec_by_index = sdr.cluster_codec_by_index;

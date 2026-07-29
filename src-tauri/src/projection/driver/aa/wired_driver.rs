@@ -19,6 +19,7 @@ use super::stack::constants::ch;
 use super::stack::session::config::{SessionConfig, VideoCodec};
 use super::stack::session::session::{Session, SessionEvent};
 use super::stack::transport::usb_aoap_bridge::{BridgeEvent, UsbAoapBridge};
+use super::status::AAStatus;
 
 /// Matches the rates `Session::handle_av_setup_request` negotiates per channel.
 fn audio_format_for(channel_id: u8) -> (i32, i32) {
@@ -127,9 +128,16 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
     // it's normally applied right at video creation below — stashed here in case it ever arrives
     // late instead.
     let mut pending_geometry: Option<(f64, f64, f64, f64, f64, f64)> = None;
+    // Set once from the phone's ServiceDiscoveryRequest (arrives before "connected"), then reused
+    // for every AAStatus emitted below — including the final "disconnected" one, so the UI can
+    // still show which device just dropped.
+    let mut device_name: Option<String> = None;
 
     while let Some(event) = rx.recv().await {
         match event {
+            SessionEvent::DeviceInfo { device_name: name } => {
+                device_name = name;
+            }
             SessionEvent::VideoGeometry {
                 crop_left,
                 crop_top,
@@ -188,7 +196,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                         // a HostUiRequested detour set aaStatus to "host-ui" (see App.vue's
                         // androidAutoActive), nothing else ever flips it back to "connected", so
                         // the UI stayed stuck on the resume screen even once frames resumed.
-                        let _ = app.emit("aa-status", "connected");
+                        let _ = app.emit(
+                            "aa-status",
+                            AAStatus {
+                                status: "connected".into(),
+                                device_name: device_name.clone(),
+                            },
+                        );
                     }
                     v.push(&app, to_gst_codec(codec), &data).await;
                 }
@@ -239,7 +253,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                 }
             }
             SessionEvent::Connected => {
-                let _ = app.emit("aa-status", "connected");
+                let _ = app.emit(
+                    "aa-status",
+                    AAStatus {
+                        status: "connected".into(),
+                        device_name: device_name.clone(),
+                    },
+                );
             }
             SessionEvent::HostUiRequested => {
                 println!("[AA wired] HostUiRequested: hiding video, focusing main");
@@ -266,7 +286,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
         }
     }
 
-    let _ = app.emit("aa-status", "disconnected");
+    let _ = app.emit(
+        "aa-status",
+        AAStatus {
+            status: "disconnected".into(),
+            device_name: device_name.clone(),
+        },
+    );
 
     if let Some(mut v) = video {
         v.dispose(&app).await;
