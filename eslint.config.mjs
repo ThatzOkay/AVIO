@@ -32,5 +32,13 @@ export default tseslint.config(
     rules: {
       'vue/multi-word-component-names': 'off',
     },
+  },
+  {
+    // Settings tabs/sections (src/components/settings/) are named after the section
+    // they render (About, Display, Sound, Updates, ...), same single-word pattern as pages.
+    files: ['src/components/settings/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
   }
 )
