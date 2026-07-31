@@ -1,6 +1,6 @@
 <template>
   <v-app>
-    <TopBar />
+    <TopBar v-if="!androidAutoActive" />
     <v-main v-if="!androidAutoActive">
       <v-container
         fluid
@@ -31,6 +31,10 @@
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+      @touchcancel="onTouchEnd"
     />
   </v-app>
 </template>
@@ -40,40 +44,102 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { computed, onBeforeMount, onMounted, ref, watch } from "vue";
-import { useStatusStore } from "./store/statusStore";
+import { useTheme } from "vuetify";
+import { AaStatus, useStatusStore } from "./store/statusStore";
 import BottomBar from "./components/BottomBar.vue";
 import TopBar from "./components/TopBar.vue";
 import { useRouter } from "vue-router";
+import { useSettingsStore } from "./store/settingsStore.ts";
+import { buildM3Theme, injectM3CssVars } from "./composables/useM3Theme";
 
+const settingsStore = useSettingsStore();
 const statusStore = useStatusStore();
 const router = useRouter();
+const theme = useTheme();
+
+// Re-derives both theme variants from the new seed and swaps the live colors in place —
+// Vuetify's theme stylesheet is reactive to `theme.themes`, so this repaints immediately
+// without recreating the Vuetify instance.
+watch(
+  () => settingsStore.seed,
+  (seed) => {
+    Object.assign(theme.themes.value.m3light.colors, buildM3Theme(seed, false).colors);
+    Object.assign(theme.themes.value.m3dark.colors, buildM3Theme(seed, true).colors);
+    injectM3CssVars(seed, theme.global.name.value === "m3dark");
+  },
+  { immediate: true },
+);
 
 // Hidden only while actively projecting video. "host-ui" (phone kicked back to its home
 // screen) shows the sidebar again alongside the resume button.
-const androidAutoActive = computed(() => statusStore.aaStatus === "connected");
+const androidAutoActive = computed(
+  () => statusStore.aaStatus.status === "connected",
+);
 
 const touchActive = ref(false);
 
-const sendTouch = (event: PointerEvent, phase: "down" | "move" | "up") => {
+const touchPoint = (t: Touch) => ({
+  x: t.clientX / window.innerWidth,
+  y: t.clientY / window.innerHeight,
+  id: t.identifier,
+});
+
+const sendTouch = (
+  touches: { x: number; y: number; id: number }[],
+  phase: "down" | "pointerdown" | "move" | "pointerup" | "up",
+  actionIndex: number,
+) => {
+  void invoke("aa_send_touch", { touches, phase, actionIndex });
+};
+
+const sendPointer = (event: PointerEvent, phase: "down" | "move" | "up") => {
   const x = event.clientX / window.innerWidth;
   const y = event.clientY / window.innerHeight;
-  void invoke("aa_send_touch", { x, y, phase });
+  void invoke("aa_send_pointer", { x, y, phase });
+};
+
+const onTouchStart = (event: TouchEvent) => {
+  touchActive.value = true;
+  const all = Array.from(event.touches).map(touchPoint);
+  const changed = event.changedTouches[0];
+  const actionIndex = all.findIndex((p) => p.id === changed.identifier);
+  // A second (or third...) finger touching down while others are already active is a
+  // POINTER_DOWN on the existing gesture, not a fresh DOWN - a plain DOWN here would reset the
+  // phone's touch state machine instead of adding a pointer to it.
+  sendTouch(all, all.length === 1 ? "down" : "pointerdown", actionIndex);
+};
+
+const onTouchMove = (event: TouchEvent) => {
+  if (!touchActive.value) return;
+  sendTouch(Array.from(event.touches).map(touchPoint), "move", 0);
+};
+
+const onTouchEnd = (event: TouchEvent) => {
+  if (!touchActive.value) return;
+  // `event.touches` already excludes the lifted pointer(s) by this point - AA needs the full
+  // pointer set as it stood just before the lift, with actionIndex pointing at the one that
+  // went up (POINTER_UP), or a plain UP only once every finger is off the screen.
+  const remaining = Array.from(event.touches).map(touchPoint);
+  const lifted = Array.from(event.changedTouches).map(touchPoint);
+  const all = [...remaining, ...lifted];
+  sendTouch(all, remaining.length === 0 ? "up" : "pointerup", remaining.length);
+  if (remaining.length === 0) touchActive.value = false;
 };
 
 const onPointerDown = (event: PointerEvent) => {
   touchActive.value = true;
-  sendTouch(event, "down");
+  sendPointer(event, "down");
 };
 
 const onPointerMove = (event: PointerEvent) => {
   if (!touchActive.value) return;
-  sendTouch(event, "move");
+  sendPointer(event, "move");
 };
 
 const onPointerUp = (event: PointerEvent) => {
   if (!touchActive.value) return;
   touchActive.value = false;
-  sendTouch(event, "up");
+  sendPointer(event, "up");
 };
 
 // The main window can go transparent (tauri.conf.json enables the capability) so that when the
@@ -105,18 +171,22 @@ onBeforeMount(async () => {
   statusStore.setRtlSdrDetected(rtlSdrDetected);
 
   listen("usb-event", async () => {
+    settingsStore.initDevices();
+
     const rtlSdrDetected = await invoke<boolean>(
       "plugin:rtl-sdr|detect_rtl_sdr",
     );
     statusStore.setRtlSdrDetected(rtlSdrDetected);
   });
 
-  listen<"disconnected" | "connected" | "host-ui">("aa-status", (event) => {
+  listen<AaStatus>("aa-status", (event) => {
     statusStore.setAaStatus(event.payload);
   });
 });
 
 onMounted(() => {
+  settingsStore.init();
+  settingsStore.initDisplayModes();
   const windowViewWidth = window.innerWidth;
   const windowViewHeight = window.innerHeight;
   const scaleFactor = window.devicePixelRatio;
@@ -130,7 +200,9 @@ onMounted(() => {
   check()
     .then((update) => {
       if (update) {
-        console.log(`Update available: ${update.currentVersion} -> ${update.version}`);
+        console.log(
+          `Update available: ${update.currentVersion} -> ${update.version}`,
+        );
       } else {
         console.log("No update available");
       }
@@ -171,6 +243,10 @@ html.show-video .v-application {
   left: 0;
   width: 100%;
 }
+
+/* :deep(.v-list-item__prepend) {
+  width: 35px !important;
+} */
 
 .slide-left-enter-active,
 .slide-right-leave-active {

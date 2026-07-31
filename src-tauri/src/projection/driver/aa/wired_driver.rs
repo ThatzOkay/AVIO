@@ -19,6 +19,7 @@ use super::stack::constants::ch;
 use super::stack::session::config::{SessionConfig, VideoCodec};
 use super::stack::session::session::{Session, SessionEvent};
 use super::stack::transport::usb_aoap_bridge::{BridgeEvent, UsbAoapBridge};
+use super::status::AAStatus;
 
 /// Matches the rates `Session::handle_av_setup_request` negotiates per channel.
 fn audio_format_for(channel_id: u8) -> (i32, i32) {
@@ -44,13 +45,26 @@ fn to_gst_codec(codec: VideoCodec) -> GstVideoCodec {
 /// `video_width`/`video_height` tier exactly matches the display, which stretches AA's video
 /// into whatever (differently-shaped) window we actually give it.
 fn display_size(app: &AppHandle) -> Option<(u32, u32)> {
-    let monitor = app.get_webview_window("main")?.current_monitor().ok()??;
-    let size = monitor.size();
+    let window = app.get_webview_window("main")?;
+    let size = window.inner_size().ok()?;
     Some((size.width, size.height))
 }
 
 pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
     let handle = app.state::<Arc<AaSessionHandle>>().inner().clone();
+    let current_settings = app
+        .state::<crate::state::SettingsState>()
+        .inner()
+        .0
+        .lock()
+        .unwrap()
+        .clone();
+
+    let (width, height) = match current_settings.ao_resolution.as_str() {
+        "1080p" => (1920, 1080),
+        "720p" => (1280, 720),
+        _ => (1920, 1080),
+    };
 
     let bridge = UsbAoapBridge::new();
     let (bridge_tx, mut bridge_rx) = mpsc::unbounded_channel();
@@ -87,13 +101,29 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
                             av1_supported: probe.av1.hw || probe.av1.sw,
                             display_width,
                             display_height,
+                            video_width: Some(width),
+                            video_height: Some(height),
+                            video_dpi: Some(current_settings.ao_dpi as u32),
+                            video_fps: current_settings.ao_framerate.parse().ok(),
+                            main_view_area_top: Some(current_settings.ao_view_area_top),
+                            main_view_area_bottom: Some(current_settings.ao_view_area_bottom),
+                            main_view_area_left: Some(current_settings.ao_view_area_left),
+                            main_view_area_right: Some(current_settings.ao_view_area_right),
+                            main_safe_area_top: Some(current_settings.ao_safe_area_top),
+                            main_safe_area_bottom: Some(current_settings.ao_safe_area_bottom),
+                            main_safe_area_left: Some(current_settings.ao_safe_area_left),
+                            main_safe_area_right: Some(current_settings.ao_safe_area_right),
                             ..SessionConfig::default()
                         };
                         let session = Session::new(socket, cfg);
                         let (session_tx, session_rx) = mpsc::unbounded_channel();
                         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
                         handle.set(cmd_tx).await;
-                        tokio::spawn(handle_session_events(app.clone(), session_rx));
+                        tokio::spawn(handle_session_events(
+                            app.clone(),
+                            handle.clone(),
+                            session_rx,
+                        ));
                         session
                             .run(session_tx, cmd_rx, handle.shutdown_notify())
                             .await;
@@ -114,7 +144,11 @@ pub async fn connect_wired(app: AppHandle, phone: nusb::DeviceInfo) {
 }
 
 /// Consumes session events: decodes+renders the main display's video, logs everything else.
-async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<SessionEvent>) {
+async fn handle_session_events(
+    app: AppHandle,
+    handle: Arc<AaSessionHandle>,
+    mut rx: mpsc::UnboundedReceiver<SessionEvent>,
+) {
     let mut video: Option<GstVideo> = None;
     // Tracks whether the video plane is currently shown, so it can be hidden while the phone is
     // showing its own host UI (otherwise the last projected frame just freezes there, visible)
@@ -127,9 +161,16 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
     // it's normally applied right at video creation below — stashed here in case it ever arrives
     // late instead.
     let mut pending_geometry: Option<(f64, f64, f64, f64, f64, f64)> = None;
+    // Set once from the phone's ServiceDiscoveryRequest (arrives before "connected"), then reused
+    // for every AAStatus emitted below — including the final "disconnected" one, so the UI can
+    // still show which device just dropped.
+    let mut device_name: Option<String> = None;
 
     while let Some(event) = rx.recv().await {
         match event {
+            SessionEvent::DeviceInfo { device_name: name } => {
+                device_name = name;
+            }
             SessionEvent::VideoGeometry {
                 crop_left,
                 crop_top,
@@ -137,7 +178,10 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                 vis_height,
                 tier_width,
                 tier_height,
+                touch_width,
+                touch_height,
             } => {
+                handle.set_touch_size(touch_width, touch_height).await;
                 let region = (
                     crop_left as f64,
                     crop_top as f64,
@@ -188,7 +232,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                         // a HostUiRequested detour set aaStatus to "host-ui" (see App.vue's
                         // androidAutoActive), nothing else ever flips it back to "connected", so
                         // the UI stayed stuck on the resume screen even once frames resumed.
-                        let _ = app.emit("aa-status", "connected");
+                        let _ = app.emit(
+                            "aa-status",
+                            AAStatus {
+                                status: "connected".into(),
+                                device_name: device_name.clone(),
+                            },
+                        );
                     }
                     v.push(&app, to_gst_codec(codec), &data).await;
                 }
@@ -239,7 +289,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
                 }
             }
             SessionEvent::Connected => {
-                let _ = app.emit("aa-status", "connected");
+                let _ = app.emit(
+                    "aa-status",
+                    AAStatus {
+                        status: "connected".into(),
+                        device_name: device_name.clone(),
+                    },
+                );
             }
             SessionEvent::HostUiRequested => {
                 println!("[AA wired] HostUiRequested: hiding video, focusing main");
@@ -266,7 +322,13 @@ async fn handle_session_events(app: AppHandle, mut rx: mpsc::UnboundedReceiver<S
         }
     }
 
-    let _ = app.emit("aa-status", "disconnected");
+    let _ = app.emit(
+        "aa-status",
+        AAStatus {
+            status: "disconnected".into(),
+            device_name: device_name.clone(),
+        },
+    );
 
     if let Some(mut v) = video {
         v.dispose(&app).await;

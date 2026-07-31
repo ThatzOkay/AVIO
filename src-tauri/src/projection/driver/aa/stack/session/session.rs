@@ -32,7 +32,8 @@ use super::super::channels::mic_channel::{MicChannel, MicEvent};
 use super::super::channels::navigation_channel::{self, NavEvent};
 use super::super::channels::video_channel::{VideoChannel, VideoEvent};
 use super::super::constants::{
-    av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version, STATUS_OK,
+    av_msg, av_setup_status, ch, ctrl_msg, frame_flags, media_codec, version,
+    STATUS_OK,
 };
 use super::super::crypto::tls_engine::TlsEngine;
 use super::super::frame::codec::{encode_frame, FrameParser, RawFrame};
@@ -57,6 +58,9 @@ pub enum SessionEvent {
     Connected,
     Disconnected,
     Error(String),
+    /// Phone's self-reported name, arrives with the `ServiceDiscoveryRequest` — before
+    /// `Connected` (which only fires once AV channel setup completes).
+    DeviceInfo { device_name: Option<String> },
     /// Encoded video access unit ready for the decoder. `channel_id` is `ch::VIDEO` or
     /// `ch::CLUSTER_VIDEO`; `codec` is whichever of H264/H265/VP9/AV1 was negotiated for it.
     VideoFrame {
@@ -75,6 +79,10 @@ pub enum SessionEvent {
         vis_height: u32,
         tier_width: u32,
         tier_height: u32,
+        // The touchscreen space advertised in the same SDR — see `send_touch`'s doc comment on
+        // why this can differ from `vis_width`/`vis_height`.
+        touch_width: u32,
+        touch_height: u32,
     },
     HostUiRequested,
     /// PCM/AAC-LC audio from the phone. `channel_id` is one of `ch::MEDIA_AUDIO`,
@@ -109,6 +117,15 @@ pub enum SessionEvent {
 pub enum SessionCommand {
     /// Single-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
     Touch { action: u32, x: u32, y: u32 },
+    /// Multi-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
+    /// `points` carries each pointer's stable per-finger id (matching the browser's
+    /// `Touch.identifier`) alongside its coordinates, and `action_index` is the position within
+    /// `points` of whichever pointer triggered `action` — required for POINTER_DOWN/POINTER_UP.
+    MultiTouch {
+        action: u32,
+        points: Vec<(u32, u32, u32)>,
+        action_index: u32,
+    },
     /// HW button/key event (see `Session::send_button`).
     Button {
         key_codes: Vec<u32>,
@@ -258,6 +275,13 @@ impl Session {
                     let result = match command {
                         SessionCommand::Touch { action, x, y } => {
                             self.send_touch(action, &[TouchPointer { x, y, id: 0 }], 0).await
+                        }
+                        SessionCommand::MultiTouch { action, points, action_index } => {
+                            let pointers: Vec<TouchPointer> = points
+                                .into_iter()
+                                .map(|(x, y, id)| TouchPointer { x, y, id })
+                                .collect();
+                            self.send_touch(action, &pointers, action_index).await
                         }
                         SessionCommand::Button { key_codes, down, longpress } => {
                             self.send_button(&key_codes, down, longpress).await
@@ -817,7 +841,10 @@ impl Session {
         events: &mpsc::UnboundedSender<SessionEvent>,
     ) -> std::io::Result<()> {
         match event {
-            ControlEvent::ServiceDiscoveryRequest(_req) => {
+            ControlEvent::ServiceDiscoveryRequest(req) => {
+                let _ = events.send(SessionEvent::DeviceInfo {
+                    device_name: req.device_name,
+                });
                 let sdr = build_service_discovery_response(&self.cfg);
                 self.video_codec_by_index = sdr.video_codec_by_index;
                 self.cluster_codec_by_index = sdr.cluster_codec_by_index;
@@ -828,6 +855,8 @@ impl Session {
                     vis_height: sdr.video_vis_height,
                     tier_width: sdr.video_tier_width,
                     tier_height: sdr.video_tier_height,
+                    touch_width: sdr.touch_width,
+                    touch_height: sdr.touch_height,
                 });
                 self.send_aa(
                     ch::CONTROL,

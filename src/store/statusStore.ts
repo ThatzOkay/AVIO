@@ -1,11 +1,14 @@
 import { defineStore } from "pinia";
 
-export type AaStatus = "disconnected" | "connected" | "host-ui";
+export type AaStatus = {
+  status: "disconnected" | "connected" | "host-ui";
+  deviceName?: string;
+};
 
 export const useStatusStore = defineStore("status", {
   state: () => ({
     rtlSdrDetected: false,
-    aaStatus: "disconnected" as AaStatus,
+    aaStatus: { status: "disconnected" } as AaStatus,
   }),
   actions: {
     setRtlSdrDetected(value: boolean) {

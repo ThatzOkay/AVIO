@@ -43,6 +43,12 @@ pub struct ServiceDiscoveryResult {
     pub video_crop_top: u32,
     pub video_vis_width: u32,
     pub video_vis_height: u32,
+    // The touchscreen space actually advertised in the INPUT channel below (tier minus both the
+    // AR-letterbox margin and any user view-area inset) — touch coordinates sent to the phone
+    // must be scaled against this, not `video_vis_width`/`height`, whenever a view-area inset
+    // is configured (see `commands::aa_send_pointer`/`aa_send_touch`).
+    pub touch_width: u32,
+    pub touch_height: u32,
 }
 
 fn resolution_from_dimensions(w: u32, h: u32) -> Option<i32> {
@@ -535,5 +541,7 @@ pub fn build_service_discovery_response(cfg: &SessionConfig) -> ServiceDiscovery
         video_crop_top: height_margin / 2,
         video_vis_width: v_w.saturating_sub(width_margin),
         video_vis_height: v_h.saturating_sub(height_margin),
+        touch_width: touch_w as u32,
+        touch_height: touch_h as u32,
     }
 }

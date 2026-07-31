@@ -240,6 +240,37 @@ jobs:
         if: matrix.os == 'linux'
         run: bun install --frozen-lockfile
 
+      # gitlab.freedesktop.org intermittently resets connections from CI IP ranges,
+      # breaking meson's wrap-git clone of wlroots/wayland/wayland-protocols inside
+      # `Build (tauri)` below. Cache the checked-out subproject sources (keyed on the
+      # wrap files + patches, so a pinned-revision or patch bump still forces a fresh
+      # clone) and retry the initial fetch like the apt-get step above, so a flaky
+      # clone only costs a few seconds here instead of failing the whole ~30min build.
+      - name: Cache avio-compositor subprojects [linux]
+        if: matrix.os == 'linux'
+        uses: actions/cache@v6
+        with:
+          path: src-tauri/crates/avio-compositor/subprojects/*/
+          key: avio-compositor-subprojects-${{ hashFiles('src-tauri/crates/avio-compositor/subprojects/*.wrap', 'src-tauri/crates/avio-compositor/subprojects/packagefiles/**') }}
+
+      - name: Fetch avio-compositor subprojects [linux]
+        if: matrix.os == 'linux'
+        shell: bash
+        working-directory: src-tauri/crates/avio-compositor
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if meson subprojects download; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "meson subprojects download failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "subprojects download attempt $attempt failed, retrying in 10s..." >&2
+            sleep 10
+          done
+
       - name: Build (tauri) [linux]
         if: matrix.os == 'linux'
         uses: tauri-apps/tauri-action@v1

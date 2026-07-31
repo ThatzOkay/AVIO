@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onBeforeMount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeMount, onMounted, ref } from "vue";
 import SlidingCard from "./SlidingCard.vue";
 import { useRouter } from "vue-router";
-import { invoke } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 
 const router = useRouter();
+
+const settingsStore = useSettingsStore();
 
 const activePanel = ref<"bluetooth" | "audio" | "brightness" | null>(null);
 
@@ -13,9 +15,19 @@ const closePanel = (panel: "bluetooth" | "audio" | "brightness") => {
   if (activePanel.value === panel) activePanel.value = null;
 };
 
-const defaultDeviceName = ref("");
-const currentVolume = ref(0);
-const currentBrightness = ref(0);
+const currentVolume = computed({
+  get: () => settingsStore.masterVolume,
+  set: (value: number) => {
+    settingsStore.setMasterVolume(value);
+  },
+});
+
+const currentBrightness = computed({
+  get: () => settingsStore.brightness,
+  set: (value: number) => {
+    settingsStore.setBrightness(value);
+  },
+});
 
 const time = ref("");
 
@@ -35,37 +47,7 @@ onBeforeMount(() => {
 
 onMounted(async () => {
   setInterval(setDate, 1000);
-
-  await invoke<string>("get_default_device_name").then((name: string) => {
-    defaultDeviceName.value = name;
-  });
-
-  await invoke<number>("get_current_volume").then((volume: number) => {
-    currentVolume.value = volume * 0.65;
-  });
-
-  await invoke<number>("get_current_brightness").then((brightness: number) => {
-    currentBrightness.value = brightness;
-    console.log("Current brightness:", brightness);
-  });
 });
-
-watch(currentVolume, (newVolume) => {
-  const actualVolume = Math.round(newVolume * 0.65);
-  updateVolume(actualVolume);
-});
-
-watch(currentBrightness, (newBrightness) => {
-  updateBrightness(newBrightness);
-});
-
-const updateVolume = async (volume: number) => {
-  await invoke("set_current_volume", { volume: Number(volume.toFixed(0)) });
-};
-
-const updateBrightness = async (brightness: number) => {
-  await invoke("set_brightness", { value: Number(brightness.toFixed(0)) });
-};
 </script>
 
 <template>
@@ -148,7 +130,7 @@ const updateBrightness = async (brightness: number) => {
           </v-btn-toggle>
           <sliding-card :shown="activePanel === 'audio'">
             <v-card-title class="text-headline-small">Audio </v-card-title>
-            <p>{{ defaultDeviceName }}</p>
+            <p>{{ settingsStore.defaultSoundDevice }}</p>
             <v-slider
               v-model="currentVolume"
               :min="0"

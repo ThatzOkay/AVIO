@@ -52,6 +52,36 @@ pub mod av_msg {
     pub const VIDEO_FOCUS_INDICATION: u16 = 0x8008;
 }
 
+// ── Radio-channel message IDs (channel 11) ───────────────────────────────────
+// Source: aap_protobuf/service/radio/RadioMessageId.proto
+pub mod radio_msg {
+    pub const ACTIVE_RADIO_NOTIFICATION: u16 = 32769;
+    pub const SELECT_ACTIVE_RADIO_REQUEST: u16 = 32770;
+    pub const STEP_CHANNEL_REQUEST: u16 = 32771;
+    pub const STEP_CHANNEL_RESPONSE: u16 = 32772;
+    pub const SEEK_STATION_REQUEST: u16 = 32773;
+    pub const SEEK_STATION_RESPONSE: u16 = 32774;
+    pub const SCAN_STATIONS_REQUEST: u16 = 32775;
+    pub const SCAN_STATIONS_RESPONSE: u16 = 32776;
+    pub const TUNE_TO_STATION_REQUEST: u16 = 32777;
+    pub const TUNE_TO_STATION_RESPONSE: u16 = 32778;
+    pub const GET_PROGRAM_LIST_REQUEST: u16 = 32779;
+    pub const GET_PROGRAM_LIST_RESPONSE: u16 = 32780;
+    pub const STATION_PRESETS_NOTIFICATION: u16 = 32781;
+    pub const CANCEL_OPERATIONS_REQUEST: u16 = 32782;
+    pub const CANCEL_OPERATIONS_RESPONSE: u16 = 32783;
+    pub const CONFIGURE_CHANNEL_SPACING_REQUEST: u16 = 32784;
+    pub const CONFIGURE_CHANNEL_SPACING_RESPONSE: u16 = 32785;
+    pub const RADIO_STATION_INFO_NOTIFICATION: u16 = 32786;
+    pub const MUTE_RADIO_REQUEST: u16 = 32787;
+    pub const MUTE_RADIO_RESPONSE: u16 = 32788;
+    pub const GET_TRAFFIC_UPDATE_REQUEST: u16 = 32789;
+    pub const GET_TRAFFIC_UPDATE_RESPONSE: u16 = 32790;
+    pub const RADIO_SOURCE_REQUEST: u16 = 32791;
+    pub const RADIO_SOURCE_RESPONSE: u16 = 32792;
+    pub const STATE_NOTIFICATION: u16 = 32793;
+}
+
 // ── Channel IDs (GAL service types) ──────────────────────────────────────────
 // Source: aasdk messenger::ChannelId enum.
 pub mod ch {
@@ -66,7 +96,7 @@ pub mod ch {
     pub const INPUT: u8 = 8; // touch + keycodes (INPUT_SOURCE)
     pub const MIC_INPUT: u8 = 9; // microphone from phone  (MEDIA_SOURCE_MICROPHONE)
     pub const BLUETOOTH: u8 = 10;
-    // (11 = RADIO)
+    pub const RADIO: u8 = 11; // FM/AM radio (RADIO_SOURCE)
     pub const NAVIGATION: u8 = 12; // NAVIGATION_STATUS
     pub const MEDIA_INFO: u8 = 13; // MEDIA_PLAYBACK_STATUS
     pub const PHONE_STATUS: u8 = 14;

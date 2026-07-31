@@ -21,12 +21,6 @@ pub fn maybe_bootstrap(context: &tauri::Context<tauri::Wry>) -> bool {
         return false; // opted out (desktop dev convenience)
     }
 
-    #[cfg(target_os = "linux")]
-    if running_under_real_compositor() {
-        eprintln!("[compositor] detected real compositor; skipping nested bootstrap");
-        return false;
-    }
-
     let Some(launcher) = launcher_path(context) else {
         eprintln!("[compositor] avio-compositor bundle not found; running without it");
         return false;
@@ -63,11 +57,28 @@ pub fn maybe_bootstrap(context: &tauri::Context<tauri::Wry>) -> bool {
         .env("AVIO_SCREENS", "main")
         .env("AVIO_OUTPUT_APP_ID", &app_id);
 
-    // Without this the compositor's nested output defaults to 1280x720 (avio-compositor.c's
-    // AVIO_OUTPUT_SIZE fallback), so the "main" window's later resize-to-monitor dance in
-    // lib.rs's setup() dutifully fills that undersized output instead of the real screen.
-    if let Some((w, h)) = detect_output_size() {
-        command.env("AVIO_OUTPUT_SIZE", format!("{w}x{h}"));
+    // Only trust the DRM-probed physical size on bare metal (no host session at all — the
+    // compositor's own `wlr_backend_autocreate()` picks the real DRM/KMS backend in that case).
+    // Once nested inside an existing desktop (WAYLAND_DISPLAY/DISPLAY set), the host places our
+    // toplevel in ITS OWN logical/scaled coordinate space, and wlroots' wl_backend has no buffer
+    // scale handling at all — requesting the panel's raw physical pixel count there just makes
+    // the window come out `scale` times too big on any HiDPI desktop (confirmed against a KDE
+    // session at 1.35x scale). LIVI never probes for a physical size either; it just defaults to
+    // 1280x720 (`resizable: true` lets you size it yourself), so do the same here rather than
+    // fighting the host compositor's scaling.
+    let host_wayland_display = std::env::var_os("WAYLAND_DISPLAY");
+    let nested = host_wayland_display.is_some() || std::env::var_os("DISPLAY").is_some();
+    if !nested {
+        if let Some((w, h)) = detect_output_size() {
+            command.env("AVIO_OUTPUT_SIZE", format!("{w}x{h}"));
+        }
+    }
+
+    // Lets `window::display_mode` (running inside the re-exec'd child, whose own
+    // WAYLAND_DISPLAY now points at the *nested* compositor) still reach the host session to
+    // query/switch its output mode via `wlr-randr` — see that module for why.
+    if let Some(host_display) = &host_wayland_display {
+        command.env("AVIO_HOST_WAYLAND_DISPLAY", host_display);
     }
 
     let spawn_result = command.spawn();
@@ -79,6 +90,24 @@ pub fn maybe_bootstrap(context: &tauri::Context<tauri::Wry>) -> bool {
             return false;
         }
     };
+
+    // `tauri dev`'s file watcher restarts on every source change by killing this (outer) process
+    // directly, with no chance for our own cleanup code to run. Without a handler, avio-compositor
+    // (and its own re-exec'd inner UI child) would just be orphaned rather than torn down, piling
+    // up one more live instance on every single hot-reload. Kill it ourselves first.
+    let child_pid = child.id();
+    std::thread::spawn(move || {
+        let Ok(mut signals) =
+            signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM, signal_hook::consts::SIGINT])
+        else {
+            return;
+        };
+        if signals.forever().next().is_some() {
+            unsafe {
+                libc::kill(child_pid as libc::pid_t, libc::SIGTERM);
+            }
+        }
+    });
 
     // Block here rather than returning right away: `tauri dev` watches this process's exit as
     // the signal that the app quit, and tears down the whole dev session (killing the compositor
@@ -98,37 +127,6 @@ pub fn maybe_bootstrap(context: &tauri::Context<tauri::Wry>) -> bool {
 
 #[cfg(not(target_os = "linux"))]
 pub fn maybe_bootstrap(_context: &tauri::Context<tauri::Wry>) -> bool {
-    false
-}
-
-/// Returns true if we're running under a known "real" Wayland compositor
-/// (KWin, GNOME Mutter, Hyprland, etc.) where spawning our own nested
-/// compositor would be redundant / unwanted.
-#[cfg(target_os = "linux")]
-fn running_under_real_compositor() -> bool {
-    // XDG_CURRENT_DESKTOP covers most DEs
-    if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
-        let desktop = desktop.to_lowercase();
-        if [
-            "kde", "gnome", "hyprland", "sway", "wayfire", "labwc", "river",
-        ]
-        .iter()
-        .any(|d| desktop.contains(d))
-        {
-            return true;
-        }
-    }
-
-    // Fallback: check if a known compositor process is running
-    if let Ok(output) = std::process::Command::new("pgrep")
-        .args(["-x", "kwin_wayland,mutter,hyprland,sway,wayfire"])
-        .output()
-    {
-        if output.status.success() {
-            return true;
-        }
-    }
-
     false
 }
 
