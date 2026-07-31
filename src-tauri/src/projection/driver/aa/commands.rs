@@ -8,11 +8,6 @@ use super::session_handle::AaSessionHandle;
 use super::stack::channels::input_channel::{button_key, touch_action};
 use super::stack::session::session::SessionCommand;
 
-// Matches SessionConfig::default()'s advertised touchscreen tier until real per-session
-// settings exist.
-const TOUCH_W: f64 = 1280.0;
-const TOUCH_H: f64 = 720.0;
-
 /// `x`/`y` are normalised 0..1 coordinates within the rendered video area. `phase` is
 /// "down"/"move"/"up".
 #[tauri::command]
@@ -28,8 +23,9 @@ pub async fn aa_send_pointer(
         "up" => touch_action::UP,
         other => return Err(format!("unknown touch phase: {other}")),
     };
-    let px = (x.clamp(0.0, 1.0) * TOUCH_W).round() as u32;
-    let py = (y.clamp(0.0, 1.0) * TOUCH_H).round() as u32;
+    let (touch_w, touch_h) = handle.touch_size().await;
+    let px = (x.clamp(0.0, 1.0) * touch_w as f64).round() as u32;
+    let py = (y.clamp(0.0, 1.0) * touch_h as f64).round() as u32;
     println!("[AA touch] sending {action:?} at {px},{py} (norm {x:.3},{y:.3})");
     handle
         .send(SessionCommand::Touch {
@@ -41,25 +37,34 @@ pub async fn aa_send_pointer(
     Ok(())
 }
 
+/// `touches` are `(x, y, id)` in normalised 0..1 coordinates plus each pointer's stable
+/// per-finger id (the browser's `Touch.identifier`, stable across its own down->move->up).
+/// `phase` is "down"/"pointerdown"/"move"/"pointerup"/"up" — the "pointer" variants cover
+/// adding/removing a secondary finger without resetting the whole gesture. `action_index` is the
+/// position within `touches` of whichever pointer triggered `phase` (ignored for "down"/"move"/"up").
 #[tauri::command]
 pub async fn aa_send_touch(
     handle: State<'_, Arc<AaSessionHandle>>,
-    touches: Vec<(f64, f64)>,
+    touches: Vec<(f64, f64, u32)>,
     phase: String,
+    action_index: u32,
 ) -> Result<(), String> {
     let action = match phase.as_str() {
         "down" => touch_action::DOWN,
+        "pointerdown" => touch_action::POINTER_DOWN,
         "move" => touch_action::MOVED,
+        "pointerup" => touch_action::POINTER_UP,
         "up" => touch_action::UP,
         other => return Err(format!("unknown touch phase: {other}")),
     };
 
-    let touch_points: Vec<(u32, u32)> = touches
+    let (touch_w, touch_h) = handle.touch_size().await;
+    let touch_points: Vec<(u32, u32, u32)> = touches
         .into_iter()
-        .map(|(x, y)| {
-            let px = (x.clamp(0.0, 1.0) * TOUCH_W).round() as u32;
-            let py = (y.clamp(0.0, 1.0) * TOUCH_H).round() as u32;
-            (px, py)
+        .map(|(x, y, id)| {
+            let px = (x.clamp(0.0, 1.0) * touch_w as f64).round() as u32;
+            let py = (y.clamp(0.0, 1.0) * touch_h as f64).round() as u32;
+            (px, py, id)
         })
         .collect();
 
@@ -67,6 +72,7 @@ pub async fn aa_send_touch(
         .send(SessionCommand::MultiTouch {
             action,
             points: touch_points,
+            action_index,
         })
         .await;
 

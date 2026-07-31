@@ -79,6 +79,10 @@ pub enum SessionEvent {
         vis_height: u32,
         tier_width: u32,
         tier_height: u32,
+        // The touchscreen space advertised in the same SDR — see `send_touch`'s doc comment on
+        // why this can differ from `vis_width`/`vis_height`.
+        touch_width: u32,
+        touch_height: u32,
     },
     HostUiRequested,
     /// PCM/AAC-LC audio from the phone. `channel_id` is one of `ch::MEDIA_AUDIO`,
@@ -114,9 +118,13 @@ pub enum SessionCommand {
     /// Single-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
     Touch { action: u32, x: u32, y: u32 },
     /// Multi-pointer touch in advertised touchscreen-space pixels (see `Session::send_touch`).
+    /// `points` carries each pointer's stable per-finger id (matching the browser's
+    /// `Touch.identifier`) alongside its coordinates, and `action_index` is the position within
+    /// `points` of whichever pointer triggered `action` — required for POINTER_DOWN/POINTER_UP.
     MultiTouch {
         action: u32,
-        points: Vec<(u32, u32)>,
+        points: Vec<(u32, u32, u32)>,
+        action_index: u32,
     },
     /// HW button/key event (see `Session::send_button`).
     Button {
@@ -268,9 +276,12 @@ impl Session {
                         SessionCommand::Touch { action, x, y } => {
                             self.send_touch(action, &[TouchPointer { x, y, id: 0 }], 0).await
                         }
-                        SessionCommand::MultiTouch { action, points } => {
-                            let pointers: Vec<TouchPointer> = points.into_iter().enumerate().map(|(i, (x, y))| TouchPointer { x, y, id: i as u32 }).collect();
-                            self.send_touch(action, &pointers, 0).await
+                        SessionCommand::MultiTouch { action, points, action_index } => {
+                            let pointers: Vec<TouchPointer> = points
+                                .into_iter()
+                                .map(|(x, y, id)| TouchPointer { x, y, id })
+                                .collect();
+                            self.send_touch(action, &pointers, action_index).await
                         }
                         SessionCommand::Button { key_codes, down, longpress } => {
                             self.send_button(&key_codes, down, longpress).await
@@ -844,6 +855,8 @@ impl Session {
                     vis_height: sdr.video_vis_height,
                     tier_width: sdr.video_tier_width,
                     tier_height: sdr.video_tier_height,
+                    touch_width: sdr.touch_width,
+                    touch_height: sdr.touch_height,
                 });
                 self.send_aa(
                     ch::CONTROL,

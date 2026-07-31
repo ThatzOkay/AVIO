@@ -2181,6 +2181,19 @@ struct avio_ctrl_client
 	size_t len;
 };
 
+// SIGTERM/SIGINT on this (outer) process - e.g. `tauri dev`'s file watcher killing it for a
+// hot-reload. Without this, the default action just drops us immediately with no chance to run
+// the normal end-of-main() teardown below, which is what actually kills our own re-exec'd inner
+// UI child (`server.startup_pid`) - leaving it (and whatever GPU/Wayland resources it holds)
+// orphaned instead, breaking the next instance that tries to start up after us.
+static int handle_term_signal(int signal_number, void *data)
+{
+	struct tinywl_server *server = data;
+	wlr_log(WLR_INFO, "avio: got signal %d, shutting down", signal_number);
+	wl_display_terminate(server->wl_display);
+	return 0;
+}
+
 // Fallback: if the inner UI never quits, SIGKILL it
 static int restart_timeout(void *data)
 {
@@ -2488,6 +2501,9 @@ int main(int argc, char *argv[])
 	}
 
 	server.wl_display = wl_display_create();
+	struct wl_event_loop *term_loop = wl_display_get_event_loop(server.wl_display);
+	wl_event_loop_add_signal(term_loop, SIGTERM, handle_term_signal, &server);
+	wl_event_loop_add_signal(term_loop, SIGINT, handle_term_signal, &server);
 	server.backend = wlr_backend_autocreate(wl_display_get_event_loop(server.wl_display), NULL);
 	if (server.backend == NULL)
 	{

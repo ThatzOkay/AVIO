@@ -3,8 +3,9 @@ use std::sync::Arc;
 use evno::Bus;
 use tauri::Manager;
 use tokio::sync::Mutex;
+use tauri_plugin_store::StoreExt;
 
-use crate::{radio::radio_service::RadioService, usb::usb_service::UsbService};
+use crate::{radio::radio_service::RadioService, state::SettingsState, state::AppSettings, usb::usb_service::UsbService};
 
 pub mod audio;
 pub mod projection;
@@ -13,6 +14,8 @@ pub mod screen;
 pub mod shared;
 pub mod usb;
 pub mod video;
+pub mod state;
+pub mod window;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -21,8 +24,56 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
+async fn get_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettings, String> {
+    let settings = state.0.lock().map_err(|e| e.to_string())?;
+    Ok(settings.clone())
+}
+
+#[tauri::command]
+async fn save_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SettingsState>,
+    settings: AppSettings,
+) -> Result<(), String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+
+    let mut current_settings = state.0.lock().map_err(|e| e.to_string())?;
+    *current_settings = settings;
+
+    store.set("master_volume", current_settings.master_volume);
+    store.set("default_sound_device", current_settings.default_sound_device.clone());
+    store.set("default_input_device", current_settings.default_input_device.clone());
+    store.set("brightness", current_settings.brightness);
+    store.set("theme", current_settings.theme.clone());
+    store.set("seed", current_settings.seed.clone());
+    store.set("scale", current_settings.scale);
+    store.set("ao_resolution", current_settings.ao_resolution.clone());
+    store.set("ao_framerate", current_settings.ao_framerate.clone());
+    store.set("ao_dpi", current_settings.ao_dpi);
+    store.set("ao_view_area_top", current_settings.ao_view_area_top);
+    store.set("ao_view_area_bottom", current_settings.ao_view_area_bottom);
+    store.set("ao_view_area_left", current_settings.ao_view_area_left);
+    store.set("ao_view_area_right", current_settings.ao_view_area_right);
+    store.set("ao_safe_area_top", current_settings.ao_safe_area_top);
+    store.set("ao_safe_area_bottom", current_settings.ao_safe_area_bottom);
+    store.set("ao_safe_area_left", current_settings.ao_safe_area_left);
+    store.set("ao_safe_area_right", current_settings.ao_safe_area_right);
+    store.set("kiosk", current_settings.kiosk);
+    store.set("display_mode", current_settings.display_mode.clone());
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn open_gst_test_window(app: tauri::AppHandle) -> Result<(), String> {
     video::gst_video::open_gst_test_window(app).await
+}
+
+/// Resolution/refresh modes the host display currently offers - see `window::display_mode`.
+/// Empty on non-Linux, or wherever there's no separate host session / `wlr-randr` to query.
+#[tauri::command]
+fn list_display_modes() -> Vec<String> {
+    window::display_mode::list_host_output_modes()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -45,7 +96,116 @@ pub fn run() {
             // class. Setting it once and unconditionally would defeat WebKitGTK's normal opaque
             // default for the whole app, not just AA video mode.
 
+            let win = app.get_webview_window("main").unwrap();
+            let _ = win.eval("window.location.reload()");
+
             let app_handle = app.handle().clone();
+
+            let store = app.store("settings.json")?;
+            let state = SettingsState(std::sync::Mutex::new(AppSettings {
+                master_volume: store
+                    .get("master_volume")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u8)
+                    .unwrap_or_default(),
+                default_sound_device: store
+                    .get("default_sound_device")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                default_input_device: store
+                    .get("default_input_device")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                brightness: store
+                    .get("brightness")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u8)
+                    .unwrap_or_default(),
+                theme: store
+                    .get("theme")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                seed: store
+                    .get("seed")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                scale: store
+                    .get("scale")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i8)
+                    .unwrap_or_default(),
+                ao_resolution: store
+                    .get("ao_resolution")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                ao_framerate: store
+                    .get("ao_framerate")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+                ao_dpi: store
+                    .get("ao_dpi")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or_default(),
+                ao_view_area_top: store
+                    .get("ao_view_area_top")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_view_area_bottom: store
+                    .get("ao_view_area_bottom")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_view_area_left: store
+                    .get("ao_view_area_left")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_view_area_right: store
+                    .get("ao_view_area_right")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_safe_area_top: store
+                    .get("ao_safe_area_top")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_safe_area_bottom: store
+                    .get("ao_safe_area_bottom")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_safe_area_left: store
+                    .get("ao_safe_area_left")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                ao_safe_area_right: store
+                    .get("ao_safe_area_right")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .unwrap_or_default(),
+                kiosk: store
+                    .get("kiosk")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or_default(),
+                display_mode: store
+                    .get("display_mode")
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default(),
+            }));
+
+            let (kiosk_setting, display_mode) = {
+                let settings = state.0.lock().unwrap();
+                (settings.kiosk, settings.display_mode.clone())
+            };
+
+            app.manage(state);
+
+            if let Some(main_window) = app.get_webview_window("main") {
+                window::setup_main_window(&main_window, kiosk_setting, &display_mode);
+            }
 
             let event_bus = Bus::new(128);
 
@@ -85,6 +245,8 @@ pub fn run() {
         .plugin(tauri_plugin_rtl_sdr::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            get_settings,
+            save_settings,
             audio::list_sinks,
             audio::list_sources,
             audio::get_current_volume,
@@ -107,6 +269,7 @@ pub fn run() {
             radio::set_fm_favorite,
             radio::recall_fm_favorite,
             open_gst_test_window,
+            list_display_modes,
             projection::driver::aa::commands::aa_send_pointer,
             projection::driver::aa::commands::aa_send_touch,
             projection::driver::aa::commands::aa_resume,
