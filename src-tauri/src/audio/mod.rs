@@ -4,9 +4,13 @@ use cpvc::get_system_volume;
 use regex::Regex;
 use tauri::AppHandle;
 
+#[cfg(target_os = "linux")]
 use libpulse_binding as pulse;
+#[cfg(target_os = "linux")]
 use pulse::callbacks::ListResult;
+#[cfg(target_os = "linux")]
 use pulse::context::{Context, FlagSet};
+#[cfg(target_os = "linux")]
 use pulse::mainloop::standard::Mainloop;
 
 use crate::audio::audio_device_enumerator::{list_audio_devices, AudioDevice, AudioDeviceType};
@@ -102,7 +106,10 @@ pub async fn get_audio_devices() -> Result<Vec<String>, String> {
 // Sources (microphones) have their own name/description pairs, distinct from
 // sinks (e.g. "alsa_input.*" vs "alsa_output.*") — cpvc's get_device_id only
 // knows about sinks, so source name<->description lookups are done here
-// directly against libpulse instead.
+// directly against libpulse instead. PulseAudio is Linux-only (see Cargo.toml)
+// - not yet implemented on Windows/macOS (would need WASAPI/CoreAudio, like
+// `set_default_device_windows`/`set_default_device_macos` below already do for sinks).
+#[cfg(target_os = "linux")]
 fn get_source_identifiers() -> Result<Vec<(String, String)>, String> {
     let identifiers = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let identifiers_clone = identifiers.clone();
@@ -155,6 +162,11 @@ fn get_source_identifiers() -> Result<Vec<(String, String)>, String> {
 
     let identifiers = identifiers.lock().unwrap().clone();
     Ok(identifiers)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn get_source_identifiers() -> Result<Vec<(String, String)>, String> {
+    Ok(Vec::new())
 }
 
 #[tauri::command]
