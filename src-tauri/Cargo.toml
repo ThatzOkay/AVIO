@@ -48,7 +48,7 @@ brightness = "0.8"
 futures = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-signal-hook = "0.3"
+signal-hook = "0.4"
 libc = "0.2"
 # PulseAudio is Linux-only - Windows has its own WASAPI path (see
 # `audio::set_default_device_windows`), it was never actually a Windows dependency.
