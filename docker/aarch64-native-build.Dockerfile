@@ -6,7 +6,7 @@
 # cross-compilation support (see docker/README.md) - `cross`'s x86_64 container can't build it,
 # but this one can, the same way `.github/workflows/build.yml`'s `ubuntu-24.04-arm` native runner
 # does, just emulated instead of on real hardware.
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
