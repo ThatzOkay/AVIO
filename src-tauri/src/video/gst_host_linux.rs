@@ -143,7 +143,7 @@ impl GstHost {
             let mut this = handle.lock().await;
             this.sock = Some(sock);
             this.starting = false;
-            let queued: Vec<Vec<u8>> = this.queue.drain(..).collect();
+            let queued: Vec<Vec<u8>> = std::mem::take(&mut this.queue);
             if let Some(s) = this.sock.as_mut() {
                 for buf in queued {
                     let _ = s.write_all(&buf).await;

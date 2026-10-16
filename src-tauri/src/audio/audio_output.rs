@@ -178,7 +178,7 @@ impl AudioOutput {
         }
         self.writing = true;
 
-        let chunks: Vec<Vec<u8>> = self.queue.drain(..).collect();
+        let chunks: Vec<Vec<u8>> = std::mem::take(&mut self.queue);
         for buf in chunks {
             let Some(stdin) = self.stdin.as_mut() else {
                 break;
